@@ -1,5 +1,5 @@
 use lib.lum;
 fn main(): i32 {
-    print("Hello World!\n");
+    print("Hello\e[31m Red Text\e[0m Normal Text\n");
     return 0;
 }

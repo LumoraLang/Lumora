@@ -10,7 +10,6 @@ build_settings:
   debug_info: false
 
 external_dependencies: []  # can be .c, .o, etc
-
 linker_settings:
   libraries:
     - "m"
