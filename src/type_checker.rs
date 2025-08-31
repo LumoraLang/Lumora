@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::errors::{LumoraError, Span};
-use crate::ast::{LumoraType, Expr, BinaryOp, Stmt, Function, Program};
+use crate::ast::{LumoraType, Expr, BinaryOp, Stmt, Function, Program, TopLevelDeclaration};
 use crate::parser::Parser;
 use crate::lexer::{Token, Spanned};
 use logos::Logos;
@@ -48,27 +48,52 @@ impl TypeChecker {
             let imported_program = parser.parse()?;
             let mut imported_type_checker = TypeChecker::new();
             imported_type_checker.check_program(&imported_program)?;
-            for function in &imported_program.functions {
-                if function.is_exported {
+            
+            for declaration in &imported_program.declarations {
+                match declaration {
+                    TopLevelDeclaration::Function(function) => {
+                        if function.is_exported {
+                            let param_types = function.params.iter().map(|(_, ty)| ty.clone()).collect();
+                            self.functions.insert(
+                                function.name.clone(),
+                                (param_types, function.return_type.clone()),
+                            );
+                        }
+                    },
+                    TopLevelDeclaration::ExternalFunction(ext_func) => {
+                        let param_types = ext_func.params.clone();
+                        self.functions.insert(
+                            ext_func.name.clone(),
+                            (param_types, ext_func.return_type.clone()),
+                        );
+                    }
+                }
+            }
+        }
+
+        for declaration in &program.declarations {
+            match declaration {
+                TopLevelDeclaration::Function(function) => {
                     let param_types = function.params.iter().map(|(_, ty)| ty.clone()).collect();
                     self.functions.insert(
                         function.name.clone(),
                         (param_types, function.return_type.clone()),
                     );
+                },
+                TopLevelDeclaration::ExternalFunction(ext_func) => {
+                    let param_types = ext_func.params.clone();
+                    self.functions.insert(
+                        ext_func.name.clone(),
+                        (param_types, ext_func.return_type.clone()),
+                    );
                 }
             }
         }
 
-        for function in &program.functions {
-            let param_types = function.params.iter().map(|(_, ty)| ty.clone()).collect();
-            self.functions.insert(
-                function.name.clone(),
-                (param_types, function.return_type.clone()),
-            );
-        }
-
-        for function in &program.functions {
-            self.check_function(function)?;
+        for declaration in &program.declarations {
+            if let TopLevelDeclaration::Function(function) = declaration {
+                self.check_function(function)?;
+            }
         }
 
         Ok(())
@@ -130,10 +155,8 @@ impl TypeChecker {
                     self.check_statement(stmt)?;
                 }
 
-                if let Some(else_stmts) = else_block {
-                    for stmt in else_stmts {
-                        self.check_statement(stmt)?;
-                    }
+                for stmt in else_block.iter().flatten() {
+                    self.check_statement(stmt)?;
                 }
 
                 Ok(())
@@ -155,7 +178,9 @@ impl TypeChecker {
     fn check_expression(&self, expr: &Expr) -> Result<LumoraType, LumoraError> {
         match expr {
             Expr::Integer(_) => Ok(LumoraType::I32),
+            Expr::Float(_) => Ok(LumoraType::F64),
             Expr::Boolean(_) => Ok(LumoraType::Bool),
+            Expr::StringLiteral(_) => Ok(LumoraType::String),
             Expr::Identifier(name) => {
                 self.variables
                     .get(name)
@@ -173,15 +198,15 @@ impl TypeChecker {
 
                 match op {
                     BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
-                        if left_type == LumoraType::I32 && right_type == LumoraType::I32 {
-                            Ok(LumoraType::I32)
-                        } else {
-                            Err(LumoraError::TypeError {
+                        match (left_type, right_type) {
+                            (LumoraType::I32, LumoraType::I32) => Ok(LumoraType::I32),
+                            (LumoraType::F64, LumoraType::F64) => Ok(LumoraType::F64),
+                            _ => Err(LumoraError::TypeError {
                                 code: "L022".to_string(),
                                 span: None,
-                                message: "Arithmetic operations require i32 operands".to_string(),
+                                message: "Arithmetic operations require operands of the same numeric type (i32 or f64)".to_string(),
                                 help: None,
-                            })
+                            }),
                         }
                     }
                     BinaryOp::Equal | BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::Greater => {

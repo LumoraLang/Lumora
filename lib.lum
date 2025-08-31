@@ -1,1 +1,19 @@
-exp fn fibonacci(n i32) i32 { if n < 2 { return n; } else { return fibonacci(n - 1) + fibonacci(n - 2); } }
+exp fn fibonacci(n i32) : i32 { if n < 2 { return n; } else { return fibonacci(n - 1) + fibonacci(n - 2); } }
+ext fn printf(string) : i32;
+fn print(s string) : i32 {
+    return printf(s);
+}
+
+ext fn c_write_file(string, string) : i32;
+fn write_file(path string, content string) : i32 {
+    return c_write_file(path, content);
+}
+
+ext fn c_sqrt(f64) : f64;
+fn sqrt(x f64) : f64 { return c_sqrt(x); }
+
+ext fn c_pow(f64, f64) : f64;
+fn pow(x f64, y f64) : f64 { return c_pow(x, y); }
+
+ext fn c_rand() : i32;
+fn random() : i32 { return c_rand(); }

@@ -1,6 +1,6 @@
 use crate::lexer::{Token, Spanned};
 use crate::errors::{LumoraError, Span};
-use crate::ast::{LumoraType, Expr, BinaryOp, Stmt, Function, Program};
+use crate::ast::{LumoraType, Expr, BinaryOp, Stmt, Function, Program, ExternalFunction, TopLevelDeclaration};
 
 pub struct Parser {
     tokens: Vec<Spanned<Token>>,
@@ -67,7 +67,7 @@ impl Parser {
 
     pub fn parse(&mut self) -> Result<Program, LumoraError> {
         let mut uses = Vec::new();
-        let mut functions = Vec::new();
+        let mut declarations = Vec::new();
         while self.peek().is_some() {
             let peeked_token = self.peek().unwrap();
             match &peeked_token.value {
@@ -76,7 +76,10 @@ impl Parser {
                     uses.push(module_name);
                 }
                 Token::Exp | Token::Fn => {
-                    functions.push(self.parse_function()?);
+                    declarations.push(TopLevelDeclaration::Function(self.parse_function()?));
+                }
+                Token::Ext => {
+                    declarations.push(TopLevelDeclaration::ExternalFunction(self.parse_external_function()?));
                 }
                 _ => {
                     return Err(LumoraError::ParseError {
@@ -86,14 +89,14 @@ impl Parser {
                             self.file_name.clone(),
                             &self.source_code,
                         )),
-                        message: "Expected 'use', 'exp', or 'fn'".to_string(),
+                        message: "Expected 'use', 'exp', 'fn', or 'ext'".to_string(),
                         help: None,
                     });
                 }
             }
         }
 
-        Ok(Program { uses, functions })
+        Ok(Program { uses, declarations })
     }
 
     fn parse_function(&mut self) -> Result<Function, LumoraError> {
@@ -166,6 +169,7 @@ impl Parser {
         }
 
         self.expect(&Token::RightParen)?;
+        self.expect(&Token::Colon)?;
         let return_type = self.parse_type()?;
         self.expect(&Token::LeftBrace)?;
         let mut body = Vec::new();
@@ -183,11 +187,64 @@ impl Parser {
         })
     }
 
+    fn parse_external_function(&mut self) -> Result<ExternalFunction, LumoraError> {
+        self.expect(&Token::Ext)?;
+        self.expect(&Token::Fn)?;
+        let name = match self.advance() {
+            Some(spanned_token) => match &spanned_token.value {
+                Token::Identifier(name) => name.clone(),
+                _ => {
+                    return Err(LumoraError::ParseError {
+                        code: "L007".to_string(),
+                        span: Some(Span::new(
+                            spanned_token.span.clone(),
+                            self.file_name.clone(),
+                            &self.source_code,
+                        )),
+                        message: "Expected external function name (identifier)".to_string(),
+                        help: None,
+                    });
+                }
+            },
+            None => {
+                return Err(LumoraError::ParseError {
+                    code: "L007".to_string(),
+                    span: None,
+                    message: "Unexpected end of input while expecting external function name".to_string(),
+                    help: None,
+                });
+            }
+        };
+
+        self.expect(&Token::LeftParen)?;
+        let mut params = Vec::new();
+        while !matches!(self.peek().map(|s| &s.value), Some(Token::RightParen)) {
+            let param_type = self.parse_type()?;
+            params.push(param_type);
+            if matches!(self.peek().map(|s| &s.value), Some(Token::Comma)) {
+                self.advance();
+            }
+        }
+
+        self.expect(&Token::RightParen)?;
+        self.expect(&Token::Colon)?;
+        let return_type = self.parse_type()?;
+        self.expect(&Token::Semicolon)?;
+
+        Ok(ExternalFunction {
+            name,
+            params,
+            return_type,
+        })
+    }
+
     fn parse_type(&mut self) -> Result<LumoraType, LumoraError> {
         match self.advance() {
             Some(spanned_token) => match &spanned_token.value {
                 Token::I32Type => Ok(LumoraType::I32),
+                Token::F64Type => Ok(LumoraType::F64),
                 Token::BoolType => Ok(LumoraType::Bool),
+                Token::StringType => Ok(LumoraType::String),
                 _ => Err(LumoraError::ParseError {
                     code: "L009".to_string(),
                     span: Some(Span::new(
@@ -245,6 +302,7 @@ impl Parser {
                     }
                 };
 
+                self.expect(&Token::Colon)?;
                 let ty = self.parse_type()?;
                 self.expect(&Token::Assign)?;
                 let value = self.parse_expression()?;
@@ -278,13 +336,17 @@ impl Parser {
                 self.expect(&Token::RightBrace)?;
                 let else_block = if matches!(self.peek().map(|s| &s.value), Some(Token::Else)) {
                     self.advance();
-                    self.expect(&Token::LeftBrace)?;
-                    let mut else_stmts = Vec::new();
-                    while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBrace)) {
-                        else_stmts.push(self.parse_statement()?);
+                    if matches!(self.peek().map(|s| &s.value), Some(Token::If)) {
+                        Some(vec![self.parse_statement()?])
+                    } else { 
+                        self.expect(&Token::LeftBrace)?;
+                        let mut else_stmts = Vec::new();
+                        while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBrace)) {
+                            else_stmts.push(self.parse_statement()?);
+                        }
+                        self.expect(&Token::RightBrace)?;
+                        Some(else_stmts)
                     }
-                    self.expect(&Token::RightBrace)?;
-                    Some(else_stmts)
                 } else {
                     None
                 };
@@ -426,8 +488,10 @@ impl Parser {
         match spanned_token {
             Some(spanned_token) => match &spanned_token.value {
                 Token::Integer(n) => Ok(Expr::Integer(*n)),
+                Token::Float(f) => Ok(Expr::Float(*f)),
                 Token::True => Ok(Expr::Boolean(true)),
                 Token::False => Ok(Expr::Boolean(false)),
+                Token::StringLiteral(s) => Ok(Expr::StringLiteral(s.clone())),
                 Token::Identifier(name_token) => {
                     let name = name_token.clone();
                     if matches!(self.peek().map(|s| &s.value), Some(Token::LeftParen)) {

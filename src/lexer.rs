@@ -18,10 +18,16 @@ pub enum Token {
     Use,
     #[token("exp")]
     Exp,
+    #[token("ext")]
+    Ext,
     #[token("i32")]
     I32Type,
+    #[token("f64")]
+    F64Type,
     #[token("bool")]
     BoolType,
+    #[token("string")]
+    StringType,
     #[token("true")]
     True,
     #[token("false")]
@@ -56,12 +62,18 @@ pub enum Token {
     Multiply,
     #[token("/")]
     Divide,
+    #[token(":")]
+    Colon,
     #[token(".")]
     Dot,
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_owned())]
     Identifier(String),
+    #[regex(r"-?[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?", |lex| lex.slice().parse().ok())]
+    Float(f64),
     #[regex(r"-?[0-9]+", |lex| lex.slice().parse().ok())]
     Integer(i32),
+    #[regex(r#""([^"\\]|\\.)*""#, |lex| lex.slice().to_owned())]
+    StringLiteral(String),
 }
 
 pub struct Spanned<T> {
@@ -79,7 +91,8 @@ pub fn get_line_col(source: &str, offset: usize) -> (usize, usize) {
         if c == '\n' {
             line += 1;
             col = 1;
-        } else {
+        }
+        else {
             col += 1;
         }
     }

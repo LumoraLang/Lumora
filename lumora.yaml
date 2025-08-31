@@ -1,0 +1,19 @@
+project_name: "Test"
+version: "0.1.0"
+authors:
+  - "NEOAPPS <asd22.info@gmail.com>"
+description: "A test project for Lumora."
+
+build_settings:
+  output_dir: "build"
+  optimization_level: "O2"
+  debug_info: false
+
+external_dependencies:
+  - "mylib.c"
+
+linker_settings:
+  libraries:
+    - "m"
+  flags:
+    - "-L/usr/local/lib"

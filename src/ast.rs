@@ -3,14 +3,25 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LumoraType {
     I32,
+    F64,
     Bool,
     Void,
+    String,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExternalFunction {
+    pub name: String,
+    pub params: Vec<LumoraType>,
+    pub return_type: LumoraType,
 }
 
 #[derive(Debug, Clone)]
 pub enum Expr {
     Integer(i32),
+    Float(f64),
     Boolean(bool),
+    StringLiteral(String),
     Identifier(String),
     Binary {
         left: Box<Expr>,
@@ -62,8 +73,14 @@ pub struct Function {
     pub body: Vec<Stmt>,
 }
 
+#[derive(Debug, Clone)]
+pub enum TopLevelDeclaration {
+    Function(Function),
+    ExternalFunction(ExternalFunction),
+}
+
 #[derive(Debug)]
 pub struct Program {
     pub uses: Vec<String>,
-    pub functions: Vec<Function>,
+    pub declarations: Vec<TopLevelDeclaration>,
 }
