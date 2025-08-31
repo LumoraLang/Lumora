@@ -13,5 +13,6 @@ external_dependencies: []  # can be .c, .o, etc
 linker_settings:
   libraries:
     - "m"
+    - "raylib"
   flags:
     - "-L/usr/local/lib"

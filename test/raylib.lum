@@ -1,0 +1,18 @@
+ext fn InitWindow(i32, i32, string): void;
+ext fn WindowShouldClose(): i32;
+ext fn BeginDrawing(): void;
+ext fn EndDrawing(): void;
+ext fn ClearBackground(i64): void;
+ext fn DrawText(string, i32, i32, i32, i64): void;
+
+fn main(): i32 {
+    InitWindow(800, 600, "Lumora + Raylib");
+    while WindowShouldClose() == 0 {
+        BeginDrawing();
+        ClearBackground(0xFFFFFFFF);
+        DrawText("Hello from Lumora!", 190, 200, 20, 0xD3D3D3FF);
+        EndDrawing();
+    }
+    return 0;
+}
+

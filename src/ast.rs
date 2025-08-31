@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LumoraType {
     I32,
+    I64,
     F64,
     Bool,
     Void,
@@ -18,7 +19,7 @@ pub struct ExternalFunction {
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Integer(i32),
+    Integer(i64),
     Float(f64),
     Boolean(bool),
     StringLiteral(String),
@@ -62,6 +63,16 @@ pub enum Stmt {
     Return(Option<Expr>),
     Expr(Expr),
     Use(String),
+    While {
+        condition: Expr,
+        body: Vec<Stmt>,
+    },
+    For {
+        initializer: Box<Stmt>,
+        condition: Expr,
+        increment: Box<Expr>,
+        body: Vec<Stmt>,
+    },
 }
 
 #[derive(Debug, Clone)]

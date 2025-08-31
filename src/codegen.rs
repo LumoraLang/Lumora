@@ -198,7 +198,16 @@ impl<'ctx> CodeGenerator<'ctx> {
             Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     let val = self.generate_expression(expr)?;
-                    let _ = self.builder.build_return(Some(&val));
+                    let returned_expr_type = self.type_of_basic_value(val);
+                    let fn_val = self.builder.get_insert_block().unwrap().get_parent().unwrap();
+                    let function_return_type = self.all_functions.get(&fn_val.get_name().to_str().unwrap().to_string()).unwrap().1.clone();
+
+                    let final_val = if returned_expr_type == LumoraType::I64 && function_return_type == LumoraType::I32 {
+                        self.builder.build_int_truncate(val.into_int_value(), self.context.i32_type(), "trunc_i64_to_i32")?.into()
+                    } else {
+                        val
+                    };
+                    let _ = self.builder.build_return(Some(&final_val));
                 } else {
                     let _ = self.builder.build_return(None);
                 }
@@ -209,12 +218,65 @@ impl<'ctx> CodeGenerator<'ctx> {
                 Ok(())
             }
             Stmt::Use(_) => Ok(()),
+            Stmt::While { condition, body } => {
+                let fn_val = self.builder.get_insert_block().unwrap().get_parent().unwrap();
+                let loop_header_bb = self.context.append_basic_block(fn_val, "loop_header");
+                let loop_body_bb = self.context.append_basic_block(fn_val, "loop_body");
+                let loop_exit_bb = self.context.append_basic_block(fn_val, "loop_exit");
+
+                self.builder.build_unconditional_branch(loop_header_bb)?;
+                self.builder.position_at_end(loop_header_bb);
+
+                let cond_val = self.generate_expression(condition)?;
+                self.builder.build_conditional_branch(
+                    cond_val.into_int_value(),
+                    loop_body_bb,
+                    loop_exit_bb,
+                )?;
+
+                self.builder.position_at_end(loop_body_bb);
+                for stmt in body {
+                    self.generate_statement(stmt)?;
+                }
+                self.builder.build_unconditional_branch(loop_header_bb)?;
+
+                self.builder.position_at_end(loop_exit_bb);
+                Ok(())
+            }
+            Stmt::For { initializer, condition, increment, body } => {
+                self.generate_statement(initializer)?;
+
+                let fn_val = self.builder.get_insert_block().unwrap().get_parent().unwrap();
+                let loop_header_bb = self.context.append_basic_block(fn_val, "for_loop_header");
+                let loop_body_bb = self.context.append_basic_block(fn_val, "for_loop_body");
+                let loop_exit_bb = self.context.append_basic_block(fn_val, "for_loop_exit");
+
+                self.builder.build_unconditional_branch(loop_header_bb)?;
+                self.builder.position_at_end(loop_header_bb);
+
+                let cond_val = self.generate_expression(condition)?;
+                self.builder.build_conditional_branch(
+                    cond_val.into_int_value(),
+                    loop_body_bb,
+                    loop_exit_bb,
+                )?;
+
+                self.builder.position_at_end(loop_body_bb);
+                for stmt in body {
+                    self.generate_statement(stmt)?;
+                }
+                self.generate_expression(increment)?;
+                self.builder.build_unconditional_branch(loop_header_bb)?;
+
+                self.builder.position_at_end(loop_exit_bb);
+                Ok(())
+            }
         }
     }
 
     fn generate_expression(&mut self, expr: &Expr) -> Result<BasicValueEnum<'ctx>, LumoraError> {
         match expr {
-            Expr::Integer(n) => Ok(self.context.i32_type().const_int(*n as u64, true).into()),
+            Expr::Integer(n) => Ok(self.context.i64_type().const_int(*n as u64, true).into()),
             Expr::Float(f) => Ok(self.context.f64_type().const_float(*f).into()),
             Expr::Boolean(b) => Ok(self.context.bool_type().const_int(*b as u64, false).into()),
             Expr::StringLiteral(s) => {
@@ -255,6 +317,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                     LumoraType::I32 => {
                         Ok(unsafe { inkwell::values::IntValue::new(loaded_value_ref).into() })
                     }
+                    LumoraType::I64 => {
+                        Ok(unsafe { inkwell::values::IntValue::new(loaded_value_ref).into() })
+                    }
                     LumoraType::F64 => {
                         Ok(unsafe { inkwell::values::FloatValue::new(loaded_value_ref).into() })
                     }
@@ -276,37 +341,48 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let left_val = self.generate_expression(left)?;
                 let right_val = self.generate_expression(right)?;
 
+                let left_lumora_type = self.type_of_basic_value(left_val);
+                let right_lumora_type = self.type_of_basic_value(right_val);
+
                 if left_val.is_int_value() && right_val.is_int_value() {
+                    let mut left_int_val = left_val.into_int_value();
+                    let mut right_int_val = right_val.into_int_value();
+                    if left_lumora_type == LumoraType::I32 && right_lumora_type == LumoraType::I64 {
+                        left_int_val = self.builder.build_int_s_extend(left_int_val, self.context.i64_type(), "sext_i32_to_i64")?;
+                    } else if left_lumora_type == LumoraType::I64 && right_lumora_type == LumoraType::I32 {
+                        right_int_val = self.builder.build_int_s_extend(right_int_val, self.context.i64_type(), "sext_i32_to_i64")?;
+                    }
+
                     match op {
                         BinaryOp::Add => Ok(self
                             .builder
                             .build_int_add(
-                                left_val.into_int_value(),
-                                right_val.into_int_value(),
+                                left_int_val,
+                                right_int_val,
                                 "add",
                             )?
                             .into()),
                         BinaryOp::Sub => Ok(self
                             .builder
                             .build_int_sub(
-                                left_val.into_int_value(),
-                                right_val.into_int_value(),
+                                left_int_val,
+                                right_int_val,
                                 "sub",
                             )?
                             .into()),
                         BinaryOp::Mul => Ok(self
                             .builder
                             .build_int_mul(
-                                left_val.into_int_value(),
-                                right_val.into_int_value(),
+                                left_int_val,
+                                right_int_val,
                                 "mul",
                             )?
                             .into()),
                         BinaryOp::Div => Ok(self
                             .builder
                             .build_int_signed_div(
-                                left_val.into_int_value(),
-                                right_val.into_int_value(),
+                                left_int_val,
+                                right_int_val,
                                 "div",
                             )?
                             .into()),
@@ -314,8 +390,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                             .builder
                             .build_int_compare(
                                 IntPredicate::EQ,
-                                left_val.into_int_value(),
-                                right_val.into_int_value(),
+                                left_int_val,
+                                right_int_val,
                                 "eq",
                             )?
                             .into()),
@@ -323,8 +399,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                             .builder
                             .build_int_compare(
                                 IntPredicate::NE,
-                                left_val.into_int_value(),
-                                right_val.into_int_value(),
+                                left_int_val,
+                                right_int_val,
                                 "ne",
                             )?
                             .into()),
@@ -332,8 +408,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                             .builder
                             .build_int_compare(
                                 IntPredicate::SLT,
-                                left_val.into_int_value(),
-                                right_val.into_int_value(),
+                                left_int_val,
+                                right_int_val,
                                 "lt",
                             )?
                             .into()),
@@ -341,8 +417,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                             .builder
                             .build_int_compare(
                                 IntPredicate::SGT,
-                                left_val.into_int_value(),
-                                right_val.into_int_value(),
+                                left_int_val,
+                                right_int_val,
                                 "gt",
                             )?
                             .into()),
@@ -445,17 +521,21 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let call_site_value =
                     self.builder
                         .build_call(fn_val, arg_values.as_slice(), "call");
+
+                let (_, lumora_return_type) = self.all_functions.get(name).unwrap();
+
                 match call_site_value?.try_as_basic_value() {
-                    Either::Left(basic_value) => Ok(basic_value),
+                    Either::Left(basic_value) => {
+                        Ok(basic_value)
+                    },
                     Either::Right(_) => {
-                        if fn_val.get_type().get_return_type().is_none() {
-                            Ok(self.context.i32_type().const_int(0, false).into())
+                        if *lumora_return_type == LumoraType::Void {
+                            Ok(self.context.i64_type().const_int(0, false).into())
                         } else {
                             Err(LumoraError::CodegenError {
                                 code: "L028".to_string(),
                                 span: None,
-                                message: "Function call returned void but expected a value"
-                                    .to_string(),
+                                message: format!("Function {} returned void but expected a value of type {:?}", name, lumora_return_type),
                                 help: None,
                             })
                         }
@@ -468,12 +548,34 @@ impl<'ctx> CodeGenerator<'ctx> {
     fn type_to_llvm_type(&self, ty: &LumoraType) -> BasicTypeEnum<'ctx> {
         match ty {
             LumoraType::I32 => self.context.i32_type().into(),
+            LumoraType::I64 => self.context.i64_type().into(),
             LumoraType::F64 => self.context.f64_type().into(),
             LumoraType::Bool => self.context.bool_type().into(),
             LumoraType::String => self.context.ptr_type(0.into()).into(),
             LumoraType::Void => {
                 panic!("Void is not a basic type and cannot be converted to BasicTypeEnum")
             }
+        }
+    }
+
+    fn type_of_basic_value(&self, value: BasicValueEnum<'ctx>) -> LumoraType {
+        if value.is_int_value() {
+            let int_value = value.into_int_value();
+            if int_value.get_type().get_bit_width() == 32 {
+                LumoraType::I32
+            } else if int_value.get_type().get_bit_width() == 64 {
+                LumoraType::I64
+            } else if int_value.get_type().get_bit_width() == 1 {
+                LumoraType::Bool
+            } else {
+                panic!("Unsupported integer bit width")
+            }
+        } else if value.is_float_value() {
+            LumoraType::F64
+        } else if value.is_pointer_value() {
+            LumoraType::String
+        } else {
+            panic!("Unsupported basic value type")
         }
     }
 }

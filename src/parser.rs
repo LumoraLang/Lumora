@@ -247,9 +247,11 @@ impl Parser {
         match self.advance() {
             Some(spanned_token) => match &spanned_token.value {
                 Token::I32Type => Ok(LumoraType::I32),
+                Token::I64Type => Ok(LumoraType::I64),
                 Token::F64Type => Ok(LumoraType::F64),
                 Token::BoolType => Ok(LumoraType::Bool),
                 Token::StringType => Ok(LumoraType::String),
+                Token::VoidType => Ok(LumoraType::Void),
                 _ => Err(LumoraError::ParseError {
                     code: "L009".to_string(),
                     span: Some(Span::new(
@@ -382,6 +384,32 @@ impl Parser {
                 self.expect(&Token::Semicolon)?;
                 Ok(Stmt::Return(expr))
             }
+            Some(Token::While) => {
+                if is_exported {
+                    return Err(LumoraError::ParseError {
+                        code: "L013".to_string(),
+                        span: current_span.map(|s| {
+                            Span::new(s.clone(), self.file_name.clone(), &self.source_code)
+                        }),
+                        message: "Cannot export 'while' statements".to_string(),
+                        help: None,
+                    });
+                }
+                self.parse_while_statement()
+            }
+            Some(Token::For) => {
+                if is_exported {
+                    return Err(LumoraError::ParseError {
+                        code: "L014".to_string(),
+                        span: current_span.map(|s| {
+                            Span::new(s.clone(), self.file_name.clone(), &self.source_code)
+                        }),
+                        message: "Cannot export 'for' statements".to_string(),
+                        help: None,
+                    });
+                }
+                self.parse_for_statement()
+            }
             _ => {
                 if is_exported {
                     return Err(LumoraError::ParseError {
@@ -398,6 +426,35 @@ impl Parser {
                 Ok(Stmt::Expr(expr))
             }
         }
+    }
+
+    fn parse_while_statement(&mut self) -> Result<Stmt, LumoraError> {
+        self.expect(&Token::While)?;
+        let condition = self.parse_expression()?;
+        self.expect(&Token::LeftBrace)?;
+        let mut body = Vec::new();
+        while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBrace)) {
+            body.push(self.parse_statement()?);
+        }
+        self.expect(&Token::RightBrace)?;
+        Ok(Stmt::While { condition, body })
+    }
+
+    fn parse_for_statement(&mut self) -> Result<Stmt, LumoraError> {
+        self.expect(&Token::For)?;
+        self.expect(&Token::LeftParen)?;
+        let initializer = Box::new(self.parse_statement()?);
+        let condition = self.parse_expression()?;
+        self.expect(&Token::Semicolon)?;
+        let increment = Box::new(self.parse_expression()?);
+        self.expect(&Token::RightParen)?;
+        self.expect(&Token::LeftBrace)?;
+        let mut body = Vec::new();
+        while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBrace)) {
+            body.push(self.parse_statement()?);
+        }
+        self.expect(&Token::RightBrace)?;
+        Ok(Stmt::For { initializer, condition, increment, body })
     }
 
     fn parse_expression(&mut self) -> Result<Expr, LumoraError> {

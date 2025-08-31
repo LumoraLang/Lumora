@@ -124,15 +124,41 @@ impl TypeChecker {
             } => {
                 let value_type = self.check_expression(value)?;
                 if *ty != value_type {
-                    return Err(LumoraError::TypeError {
-                        code: "L019".to_string(),
-                        span: None,
-                        message: format!(
-                            "Type mismatch: expected {:?}, found {:?}",
-                            ty, value_type
-                        ),
-                        help: None,
-                    });
+                    if *ty == LumoraType::I32 && value_type == LumoraType::I64 {
+                        if let Expr::Integer(n) = value {
+                            if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {} else {
+                                return Err(LumoraError::TypeError {
+                                    code: "L019".to_string(),
+                                    span: None,
+                                    message: format!(
+                                        "Type mismatch: I66 value {} out of range for I32",
+                                        n
+                                    ),
+                                    help: None,
+                                });
+                            }
+                        } else {
+                            return Err(LumoraError::TypeError {
+                                code: "L019".to_string(),
+                                span: None,
+                                message: format!(
+                                    "Type mismatch: expected {:?}, found {:?}",
+                                    ty, value_type
+                                ),
+                                help: None,
+                            });
+                        }
+                    } else {
+                        return Err(LumoraError::TypeError {
+                            code: "L019".to_string(),
+                            span: None,
+                            message: format!(
+                                "Type mismatch: expected {:?}, found {:?}",
+                                ty, value_type
+                            ),
+                            help: None,
+                        });
+                    }
                 }
                 self.variables.insert(name.clone(), ty.clone());
                 Ok(())
@@ -173,12 +199,44 @@ impl TypeChecker {
                 Ok(())
             }
             Stmt::Use(_) => Ok(()),
+            Stmt::While { condition, body } => {
+                let cond_type = self.check_expression(condition)?;
+                if cond_type != LumoraType::Bool {
+                    return Err(LumoraError::TypeError {
+                        code: "L027".to_string(),
+                        span: None,
+                        message: "While condition must be boolean".to_string(),
+                        help: None,
+                    });
+                }
+                for stmt in body {
+                    self.check_statement(stmt)?;
+                }
+                Ok(())
+            }
+            Stmt::For { initializer, condition, increment, body } => {
+                self.check_statement(initializer)?;
+                let cond_type = self.check_expression(condition)?;
+                if cond_type != LumoraType::Bool {
+                    return Err(LumoraError::TypeError {
+                        code: "L028".to_string(),
+                        span: None,
+                        message: "For loop condition must be boolean".to_string(),
+                        help: None,
+                    });
+                }
+                self.check_expression(increment)?;
+                for stmt in body {
+                    self.check_statement(stmt)?;
+                }
+                Ok(())
+            }
         }
     }
 
     fn check_expression(&self, expr: &Expr) -> Result<LumoraType, LumoraError> {
         match expr {
-            Expr::Integer(_) => Ok(LumoraType::I32),
+            Expr::Integer(_) => Ok(LumoraType::I64),
             Expr::Float(_) => Ok(LumoraType::F64),
             Expr::Boolean(_) => Ok(LumoraType::Bool),
             Expr::StringLiteral(_) => Ok(LumoraType::String),
@@ -201,6 +259,7 @@ impl TypeChecker {
                     BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
                         match (left_type, right_type) {
                             (LumoraType::I32, LumoraType::I32) => Ok(LumoraType::I32),
+                            (LumoraType::I64, LumoraType::I64) => Ok(LumoraType::I64),
                             (LumoraType::F64, LumoraType::F64) => Ok(LumoraType::F64),
                             _ => Err(LumoraError::TypeError {
                                 code: "L022".to_string(),
@@ -212,6 +271,9 @@ impl TypeChecker {
                     }
                     BinaryOp::Equal | BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::Greater => {
                         if left_type == right_type {
+                            Ok(LumoraType::Bool)
+                        } else if (left_type == LumoraType::I32 && right_type == LumoraType::I64) ||
+                                  (left_type == LumoraType::I64 && right_type == LumoraType::I32) {
                             Ok(LumoraType::Bool)
                         } else {
                             Err(LumoraError::TypeError {
@@ -243,15 +305,41 @@ impl TypeChecker {
                     for (arg, expected_type) in args.iter().zip(param_types.iter()) {
                         let arg_type = self.check_expression(arg)?;
                         if arg_type != *expected_type {
-                            return Err(LumoraError::TypeError {
-                                code: "L025".to_string(),
-                                span: None,
-                                message: format!(
-                                    "Argument type mismatch: expected {:?}, found {:?}",
-                                    expected_type, arg_type
-                                ),
-                                help: None,
-                            });
+                            if *expected_type == LumoraType::I32 && arg_type == LumoraType::I64 {
+                                if let Expr::Integer(n) = arg {
+                                    if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {} else {
+                                        return Err(LumoraError::TypeError {
+                                            code: "L025".to_string(),
+                                            span: None,
+                                            message: format!(
+                                                "Argument type mismatch: I66 value {} out of range for I32",
+                                                n
+                                            ),
+                                            help: None,
+                                        });
+                                    }
+                                } else {
+                                    return Err(LumoraError::TypeError {
+                                        code: "L025".to_string(),
+                                        span: None,
+                                        message: format!(
+                                            "Argument type mismatch: expected {:?}, found {:?}",
+                                            expected_type, arg_type
+                                        ),
+                                        help: None,
+                                    });
+                                }
+                            } else {
+                                return Err(LumoraError::TypeError {
+                                    code: "L025".to_string(),
+                                    span: None,
+                                    message: format!(
+                                        "Argument type mismatch: expected {:?}, found {:?}",
+                                        expected_type, arg_type
+                                    ),
+                                    help: None,
+                                });
+                            }
                         }
                     }
 

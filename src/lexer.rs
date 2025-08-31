@@ -20,8 +20,16 @@ pub enum Token {
     Exp,
     #[token("ext")]
     Ext,
+    #[token("while")]
+    While,
+    #[token("for")]
+    For,
+    #[token("void")]
+    VoidType,
     #[token("i32")]
     I32Type,
+    #[token("i64")]
+    I64Type,
     #[token("f64")]
     F64Type,
     #[token("bool")]
@@ -70,8 +78,15 @@ pub enum Token {
     Identifier(String),
     #[regex(r"-?[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?", |lex| lex.slice().parse().ok())]
     Float(f64),
-    #[regex(r"-?[0-9]+", |lex| lex.slice().parse().ok())]
-    Integer(i32),
+    #[regex(r"0x[0-9a-fA-F]+|-?[0-9]+", |lex| {
+        let slice = lex.slice();
+        if slice.starts_with("0x") {
+            i64::from_str_radix(slice.trim_start_matches("0x"), 16).ok()
+        } else {
+            slice.parse::<i64>().ok()
+        }
+    })]
+    Integer(i64),
     #[regex(r#""([^"\\]|\\.)*""#, |lex| parse_string_literal(lex))]
     StringLiteral(String),
 }
