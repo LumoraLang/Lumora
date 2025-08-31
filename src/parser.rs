@@ -462,7 +462,12 @@ impl Parser {
             body.push(self.parse_statement()?);
         }
         self.expect(&Token::RightBrace)?;
-        Ok(Stmt::For { initializer, condition, increment, body })
+        Ok(Stmt::For {
+            initializer,
+            condition,
+            increment,
+            body,
+        })
     }
 
     fn parse_expression(&mut self) -> Result<Expr, LumoraError> {

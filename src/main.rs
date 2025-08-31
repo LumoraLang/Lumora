@@ -1,36 +1,74 @@
+use clap::Parser;
 use logos::Logos;
 use lumora::compile_lumora;
-use lumora::config::load_config;
+use lumora::config::{OutputType, load_config};
 use lumora::errors::LumoraError;
 use lumora::lexer::{Spanned, Token};
-use lumora::parser::Parser;
+use lumora::parser::Parser as LumoraParser;
 use lumora::type_checker::TypeChecker;
-use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 {
-        eprintln!("Usage: {} <input.lum> [output_executable_name]", args[0]);
-        return Ok(());
-    }
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    /// Path to the input .lum file
+    input_file: PathBuf,
 
-    let config = load_config("lumora.yaml").unwrap_or_else(|e| {
-        eprintln!(
-            "Warning: Could not load lumora.yaml: {}. Using default configuration.",
-            e
-        );
-        Default::default()
-    });
+    /// Name of the output executable or library
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+
+    /// Path to the lumora.yaml configuration file
+    #[arg(short, long, value_name = "FILE")]
+    config: Option<PathBuf>,
+
+    /// Optimization level (e.g., O0, O1, O2, O3, Os, Oz)
+    #[arg(short = 'O', long, value_name = "LEVEL")]
+    optimize: Option<String>,
+
+    /// Include debug information
+    #[arg(short, long)]
+    debug: bool,
+
+    /// Target triple for compilation (e.g., x86_64-unknown-linux-gnu)
+    #[arg(short, long, value_name = "TRIPLE")]
+    target: Option<String>,
+
+    /// Type of output to generate (executable, shared, static)
+    #[arg(long, value_enum, default_value_t = OutputType::Executable)]
+    output_type: OutputType,
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
+
+    let config = if let Some(config_path) = cli.config {
+        load_config(&config_path.to_string_lossy()).unwrap_or_else(|e| {
+            eprintln!(
+                "Warning: Could not load config file {}: {}. Using default configuration.",
+                config_path.display(),
+                e
+            );
+            Default::default()
+        })
+    } else {
+        load_config("lumora.yaml").unwrap_or_else(|e| {
+            eprintln!(
+                "Warning: Could not load lumora.yaml: {}. Using default configuration.",
+                e
+            );
+            Default::default()
+        })
+    };
 
     let output_dir = &config.build_settings.output_dir;
     fs::create_dir_all(output_dir)?;
 
-    let input_file = &args[1];
-    let output_name = if args.len() > 2 {
-        PathBuf::from(&args[2])
+    let input_file = &cli.input_file;
+    let output_name = if let Some(output_path) = cli.output {
+        output_path
     } else {
         Path::new(input_file)
             .file_stem()
@@ -47,7 +85,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             code: "L030".to_string(),
             span: Some(lumora::errors::Span::new(
                 span.clone(),
-                input_file.clone(),
+                input_file.to_string_lossy().to_string(),
                 &source_code,
             )),
             message: "Lexing error: Unrecognized token".to_string(),
@@ -56,7 +94,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         tokens.push(Spanned { value: token, span });
     }
 
-    let mut parser = Parser::new(tokens, input_file.clone(), source_code.clone());
+    let mut parser = LumoraParser::new(
+        tokens,
+        input_file.to_string_lossy().to_string(),
+        source_code.clone(),
+    );
     let program = parser.parse()?;
     let mut type_checker = TypeChecker::new();
     type_checker.check_program(&program)?;
@@ -114,14 +156,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .arg("-filetype=obj")
         .arg("-relocation-model=pic");
 
-    if !config.build_settings.optimization_level.is_empty() {
-        llc_command.arg(format!("-{}", config.build_settings.optimization_level));
+    let effective_optimization_level = cli.optimize.as_ref().or_else(|| {
+        if config.build_settings.optimization_level.is_empty() {
+            None
+        } else {
+            Some(&config.build_settings.optimization_level)
+        }
+    });
+
+    if let Some(opt_level) = effective_optimization_level {
+        llc_command.arg(format!("-{}", opt_level));
     }
-    if config.build_settings.debug_info {
+
+    if cli.debug || config.build_settings.debug_info {
         llc_command.arg("--debugify-level=locations");
     }
-    if !config.build_settings.target_triple.is_empty() {
-        llc_command.arg(format!("-mtriple={}", config.build_settings.target_triple));
+
+    let effective_target_triple = cli.target.as_ref().or_else(|| {
+        if config.build_settings.target_triple.is_empty() {
+            None
+        } else {
+            Some(&config.build_settings.target_triple)
+        }
+    });
+
+    if let Some(target_triple) = effective_target_triple {
+        llc_command.arg(format!("-mtriple={}", target_triple));
     }
 
     let llc_output = llc_command.output()?;
@@ -162,16 +222,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .arg("-o")
                     .arg(&obj_file);
 
-                if !config.build_settings.optimization_level.is_empty() {
-                    clang_compile_command
-                        .arg(format!("-{}", config.build_settings.optimization_level));
+                let effective_optimization_level = cli.optimize.as_ref().or_else(|| {
+                    if config.build_settings.optimization_level.is_empty() {
+                        None
+                    } else {
+                        Some(&config.build_settings.optimization_level)
+                    }
+                });
+
+                if let Some(opt_level) = effective_optimization_level {
+                    clang_compile_command.arg(format!("-{}", opt_level));
                 }
-                if config.build_settings.debug_info {
+
+                if cli.debug || config.build_settings.debug_info {
                     clang_compile_command.arg("-g");
                 }
-                if !config.build_settings.target_triple.is_empty() {
-                    clang_compile_command
-                        .arg(format!("-target={}", config.build_settings.target_triple));
+
+                let effective_target_triple = cli.target.as_ref().or_else(|| {
+                    if config.build_settings.target_triple.is_empty() {
+                        None
+                    } else {
+                        Some(&config.build_settings.target_triple)
+                    }
+                });
+
+                if let Some(target_triple) = effective_target_triple {
+                    clang_compile_command.arg(format!("-target={}", target_triple));
                 }
                 clang_compile_command.arg("-fPIE");
                 let compile_output = clang_compile_command.output()?;
@@ -200,14 +276,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let final_output_name = match config.build_settings.output_type {
-        lumora::config::OutputType::Executable => output_name.clone(),
-        lumora::config::OutputType::SharedLibrary => output_name.with_extension("so"),
-        lumora::config::OutputType::StaticLibrary => output_name.with_extension("a"),
+    let final_output_name = match cli.output_type {
+        OutputType::Executable => output_name.clone(),
+        OutputType::SharedLibrary => output_name.with_extension("so"),
+        OutputType::StaticLibrary => output_name.with_extension("a"),
     };
 
-    let link_result = match config.build_settings.output_type {
-        lumora::config::OutputType::Executable | lumora::config::OutputType::SharedLibrary => {
+    let link_result = match cli.output_type {
+        OutputType::Executable | OutputType::SharedLibrary => {
             let mut clang_command = Command::new("clang");
             clang_command
                 .arg(&o_file)
@@ -216,7 +292,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .arg("-o")
                 .arg(&final_output_name);
 
-            if let lumora::config::OutputType::SharedLibrary = config.build_settings.output_type {
+            if let OutputType::SharedLibrary = cli.output_type {
                 clang_command.arg("-shared");
             }
 
@@ -225,19 +301,37 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             clang_command.args(&config.linker_settings.flags);
 
-            if !config.build_settings.optimization_level.is_empty() {
-                clang_command.arg(format!("-{}", config.build_settings.optimization_level));
+            let effective_optimization_level = cli.optimize.as_ref().or_else(|| {
+                if config.build_settings.optimization_level.is_empty() {
+                    None
+                } else {
+                    Some(&config.build_settings.optimization_level)
+                }
+            });
+
+            if let Some(opt_level) = effective_optimization_level {
+                clang_command.arg(format!("-{}", opt_level));
             }
-            if config.build_settings.debug_info {
+
+            if cli.debug || config.build_settings.debug_info {
                 clang_command.arg("-g");
             }
-            if !config.build_settings.target_triple.is_empty() {
-                clang_command.arg(format!("-target={}", config.build_settings.target_triple));
+
+            let effective_target_triple = cli.target.as_ref().or_else(|| {
+                if config.build_settings.target_triple.is_empty() {
+                    None
+                } else {
+                    Some(&config.build_settings.target_triple)
+                }
+            });
+
+            if let Some(target_triple) = effective_target_triple {
+                clang_command.arg(format!("-target={}", target_triple));
             }
 
             clang_command.output()?
         }
-        lumora::config::OutputType::StaticLibrary => {
+        OutputType::StaticLibrary => {
             let mut ar_command = Command::new("ar");
             ar_command
                 .arg("rcs")
@@ -277,7 +371,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!(
         "Compilation successful: {} -> {}",
-        input_file,
+        input_file.display(),
         final_output_name.display()
     );
     Ok(())

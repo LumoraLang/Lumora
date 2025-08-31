@@ -198,13 +198,31 @@ impl<'ctx> CodeGenerator<'ctx> {
             Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     let val = self.generate_expression(expr)?;
-                    let fn_val = self.builder.get_insert_block().unwrap().get_parent().unwrap();
-                    let function_return_type = self.all_functions.get(&fn_val.get_name().to_str().unwrap().to_string()).unwrap().1.clone();
+                    let fn_val = self
+                        .builder
+                        .get_insert_block()
+                        .unwrap()
+                        .get_parent()
+                        .unwrap();
+                    let function_return_type = self
+                        .all_functions
+                        .get(&fn_val.get_name().to_str().unwrap().to_string())
+                        .unwrap()
+                        .1
+                        .clone();
 
                     let returned_expr_type = self.type_of_expression(expr)?;
 
-                    let final_val = if returned_expr_type == LumoraType::I64 && function_return_type == LumoraType::I32 {
-                        self.builder.build_int_truncate(val.into_int_value(), self.context.i32_type(), "trunc_i64_to_i32")?.into()
+                    let final_val = if returned_expr_type == LumoraType::I64
+                        && function_return_type == LumoraType::I32
+                    {
+                        self.builder
+                            .build_int_truncate(
+                                val.into_int_value(),
+                                self.context.i32_type(),
+                                "trunc_i64_to_i32",
+                            )?
+                            .into()
                     } else {
                         val
                     };
@@ -220,7 +238,12 @@ impl<'ctx> CodeGenerator<'ctx> {
             }
             Stmt::Use(_) => Ok(()),
             Stmt::While { condition, body } => {
-                let fn_val = self.builder.get_insert_block().unwrap().get_parent().unwrap();
+                let fn_val = self
+                    .builder
+                    .get_insert_block()
+                    .unwrap()
+                    .get_parent()
+                    .unwrap();
                 let loop_header_bb = self.context.append_basic_block(fn_val, "loop_header");
                 let loop_body_bb = self.context.append_basic_block(fn_val, "loop_body");
                 let loop_exit_bb = self.context.append_basic_block(fn_val, "loop_exit");
@@ -244,10 +267,20 @@ impl<'ctx> CodeGenerator<'ctx> {
                 self.builder.position_at_end(loop_exit_bb);
                 Ok(())
             }
-            Stmt::For { initializer, condition, increment, body } => {
+            Stmt::For {
+                initializer,
+                condition,
+                increment,
+                body,
+            } => {
                 self.generate_statement(initializer)?;
 
-                let fn_val = self.builder.get_insert_block().unwrap().get_parent().unwrap();
+                let fn_val = self
+                    .builder
+                    .get_insert_block()
+                    .unwrap()
+                    .get_parent()
+                    .unwrap();
                 let loop_header_bb = self.context.append_basic_block(fn_val, "for_loop_header");
                 let loop_body_bb = self.context.append_basic_block(fn_val, "for_loop_body");
                 let loop_exit_bb = self.context.append_basic_block(fn_val, "for_loop_exit");
@@ -352,61 +385,45 @@ impl<'ctx> CodeGenerator<'ctx> {
                     let mut left_int_val = left_val.into_int_value();
                     let mut right_int_val = right_val.into_int_value();
                     if left_lumora_type == LumoraType::I32 && right_lumora_type == LumoraType::I64 {
-                        left_int_val = self.builder.build_int_s_extend(left_int_val, self.context.i64_type(), "sext_i32_to_i64")?;
-                    } else if left_lumora_type == LumoraType::I64 && right_lumora_type == LumoraType::I32 {
-                        right_int_val = self.builder.build_int_s_extend(right_int_val, self.context.i64_type(), "sext_i32_to_i64")?;
+                        left_int_val = self.builder.build_int_s_extend(
+                            left_int_val,
+                            self.context.i64_type(),
+                            "sext_i32_to_i64",
+                        )?;
+                    } else if left_lumora_type == LumoraType::I64
+                        && right_lumora_type == LumoraType::I32
+                    {
+                        right_int_val = self.builder.build_int_s_extend(
+                            right_int_val,
+                            self.context.i64_type(),
+                            "sext_i32_to_i64",
+                        )?;
                     }
 
                     match op {
                         BinaryOp::Add => Ok(self
                             .builder
-                            .build_int_add(
-                                left_int_val,
-                                right_int_val,
-                                "add",
-                            )?
+                            .build_int_add(left_int_val, right_int_val, "add")?
                             .into()),
                         BinaryOp::Sub => Ok(self
                             .builder
-                            .build_int_sub(
-                                left_int_val,
-                                right_int_val,
-                                "sub",
-                            )?
+                            .build_int_sub(left_int_val, right_int_val, "sub")?
                             .into()),
                         BinaryOp::Mul => Ok(self
                             .builder
-                            .build_int_mul(
-                                left_int_val,
-                                right_int_val,
-                                "mul",
-                            )?
+                            .build_int_mul(left_int_val, right_int_val, "mul")?
                             .into()),
                         BinaryOp::Div => Ok(self
                             .builder
-                            .build_int_signed_div(
-                                left_int_val,
-                                right_int_val,
-                                "div",
-                            )?
+                            .build_int_signed_div(left_int_val, right_int_val, "div")?
                             .into()),
                         BinaryOp::Equal => Ok(self
                             .builder
-                            .build_int_compare(
-                                IntPredicate::EQ,
-                                left_int_val,
-                                right_int_val,
-                                "eq",
-                            )?
+                            .build_int_compare(IntPredicate::EQ, left_int_val, right_int_val, "eq")?
                             .into()),
                         BinaryOp::NotEqual => Ok(self
                             .builder
-                            .build_int_compare(
-                                IntPredicate::NE,
-                                left_int_val,
-                                right_int_val,
-                                "ne",
-                            )?
+                            .build_int_compare(IntPredicate::NE, left_int_val, right_int_val, "ne")?
                             .into()),
                         BinaryOp::Less => Ok(self
                             .builder
@@ -529,9 +546,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let (_, lumora_return_type) = self.all_functions.get(name).unwrap();
 
                 match call_site_value?.try_as_basic_value() {
-                    Either::Left(basic_value) => {
-                        Ok(basic_value)
-                    },
+                    Either::Left(basic_value) => Ok(basic_value),
                     Either::Right(_) => {
                         if *lumora_return_type == LumoraType::Void {
                             Ok(self.context.i64_type().const_int(0, false).into())
@@ -539,7 +554,10 @@ impl<'ctx> CodeGenerator<'ctx> {
                             Err(LumoraError::CodegenError {
                                 code: "L028".to_string(),
                                 span: None,
-                                message: format!("Function {} returned void but expected a value of type {:?}", name, lumora_return_type),
+                                message: format!(
+                                    "Function {} returned void but expected a value of type {:?}",
+                                    name, lumora_return_type
+                                ),
                                 help: None,
                             })
                         }
@@ -563,7 +581,16 @@ impl<'ctx> CodeGenerator<'ctx> {
                 for (i, element_expr) in elements.iter().enumerate() {
                     let element_val = self.generate_expression(element_expr)?;
                     let index = self.context.i64_type().const_int(i as u64, false);
-                    let ptr = unsafe { self.builder.build_gep(llvm_element_type, array_alloca, &[self.context.i64_type().const_int(0, false), index], "array_element_ptr").unwrap() };
+                    let ptr = unsafe {
+                        self.builder
+                            .build_gep(
+                                llvm_element_type,
+                                array_alloca,
+                                &[self.context.i64_type().const_int(0, false), index],
+                                "array_element_ptr",
+                            )
+                            .unwrap()
+                    };
                     self.builder.build_store(ptr, element_val)?;
                 }
                 Ok(array_alloca.into())
@@ -574,7 +601,9 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                 let array_type = self.type_of_expression(array)?;
                 let (llvm_element_type, result_type) = match array_type {
-                    LumoraType::Array(inner_type) => (self.type_to_llvm_type(&inner_type), *inner_type),
+                    LumoraType::Array(inner_type) => {
+                        (self.type_to_llvm_type(&inner_type), *inner_type)
+                    }
                     LumoraType::String => (self.context.i8_type().into(), LumoraType::I32),
                     _ => {
                         return Err(LumoraError::CodegenError {
@@ -586,11 +615,32 @@ impl<'ctx> CodeGenerator<'ctx> {
                     }
                 };
 
-                let ptr = unsafe { self.builder.build_gep(llvm_element_type, array_ptr, &[self.context.i64_type().const_int(0, false), index_val], "element_ptr").unwrap() };
-                let loaded_val = self.builder.build_load(llvm_element_type, ptr, "load_element")?;
+                let ptr = unsafe {
+                    self.builder
+                        .build_gep(
+                            llvm_element_type,
+                            array_ptr,
+                            &[self.context.i64_type().const_int(0, false), index_val],
+                            "element_ptr",
+                        )
+                        .unwrap()
+                };
+                let loaded_val = self
+                    .builder
+                    .build_load(llvm_element_type, ptr, "load_element")?;
 
-                if result_type == LumoraType::I32 && loaded_val.is_int_value() && loaded_val.into_int_value().get_type().get_bit_width() == 8 {
-                    Ok(self.builder.build_int_s_extend(loaded_val.into_int_value(), self.context.i32_type(), "sext_i8_to_i32")?.into())
+                if result_type == LumoraType::I32
+                    && loaded_val.is_int_value()
+                    && loaded_val.into_int_value().get_type().get_bit_width() == 8
+                {
+                    Ok(self
+                        .builder
+                        .build_int_s_extend(
+                            loaded_val.into_int_value(),
+                            self.context.i32_type(),
+                            "sext_i8_to_i32",
+                        )?
+                        .into())
                 } else {
                     Ok(loaded_val.into())
                 }
@@ -608,7 +658,9 @@ impl<'ctx> CodeGenerator<'ctx> {
             LumoraType::Void => {
                 panic!("Void is not a basic type and cannot be converted to BasicTypeEnum")
             }
-            LumoraType::Array(inner_type) => self.type_to_llvm_type(inner_type).ptr_type(0.into()).into(),
+            LumoraType::Array(inner_type) => {
+                self.type_to_llvm_type(inner_type).ptr_type(0.into()).into()
+            }
         }
     }
 
@@ -618,17 +670,16 @@ impl<'ctx> CodeGenerator<'ctx> {
             Expr::Float(_) => Ok(LumoraType::F64),
             Expr::Boolean(_) => Ok(LumoraType::Bool),
             Expr::StringLiteral(_) => Ok(LumoraType::String),
-            Expr::Identifier(name) => {
-                self.variables
-                    .get(name)
-                    .map(|(_, ty)| ty.clone())
-                    .ok_or_else(|| LumoraError::CodegenError {
-                        code: "L038".to_string(),
-                        span: None,
-                        message: format!("Undefined variable: {}", name),
-                        help: None,
-                    })
-            }
+            Expr::Identifier(name) => self
+                .variables
+                .get(name)
+                .map(|(_, ty)| ty.clone())
+                .ok_or_else(|| LumoraError::CodegenError {
+                    code: "L038".to_string(),
+                    span: None,
+                    message: format!("Undefined variable: {}", name),
+                    help: None,
+                }),
             Expr::Binary { left, op, right } => {
                 let left_type = self.type_of_expression(left)?;
                 let right_type = self.type_of_expression(right)?;
@@ -650,8 +701,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                     BinaryOp::Equal | BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::Greater => {
                         if left_type == right_type {
                             Ok(LumoraType::Bool)
-                        } else if (left_type == LumoraType::I32 && right_type == LumoraType::I64) ||
-                                  (left_type == LumoraType::I64 && right_type == LumoraType::I32) {
+                        } else if (left_type == LumoraType::I32 && right_type == LumoraType::I64)
+                            || (left_type == LumoraType::I64 && right_type == LumoraType::I32)
+                        {
                             Ok(LumoraType::Bool)
                         } else {
                             Err(LumoraError::CodegenError {
@@ -664,17 +716,16 @@ impl<'ctx> CodeGenerator<'ctx> {
                     }
                 }
             }
-            Expr::Call { name, args: _ } => {
-                self.all_functions
-                    .get(name)
-                    .map(|(_, return_type)| return_type.clone())
-                    .ok_or_else(|| LumoraError::CodegenError {
-                        code: "L041".to_string(),
-                        span: None,
-                        message: format!("Undefined function: {}", name),
-                        help: None,
-                    })
-            }
+            Expr::Call { name, args: _ } => self
+                .all_functions
+                .get(name)
+                .map(|(_, return_type)| return_type.clone())
+                .ok_or_else(|| LumoraError::CodegenError {
+                    code: "L041".to_string(),
+                    span: None,
+                    message: format!("Undefined function: {}", name),
+                    help: None,
+                }),
             Expr::ArrayLiteral(elements) => {
                 if elements.is_empty() {
                     return Err(LumoraError::CodegenError {

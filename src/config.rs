@@ -1,9 +1,10 @@
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone, ValueEnum)]
 pub enum OutputType {
     #[default]
     Executable,

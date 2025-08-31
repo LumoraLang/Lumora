@@ -126,7 +126,8 @@ impl TypeChecker {
                 if *ty != value_type {
                     if *ty == LumoraType::I32 && value_type == LumoraType::I64 {
                         if let Expr::Integer(n) = value {
-                            if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {} else {
+                            if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {
+                            } else {
                                 return Err(LumoraError::TypeError {
                                     code: "L019".to_string(),
                                     span: None,
@@ -214,7 +215,12 @@ impl TypeChecker {
                 }
                 Ok(())
             }
-            Stmt::For { initializer, condition, increment, body } => {
+            Stmt::For {
+                initializer,
+                condition,
+                increment,
+                body,
+            } => {
                 self.check_statement(initializer)?;
                 let cond_type = self.check_expression(condition)?;
                 if cond_type != LumoraType::Bool {
@@ -272,8 +278,9 @@ impl TypeChecker {
                     BinaryOp::Equal | BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::Greater => {
                         if left_type == right_type {
                             Ok(LumoraType::Bool)
-                        } else if (left_type == LumoraType::I32 && right_type == LumoraType::I64) ||
-                                  (left_type == LumoraType::I64 && right_type == LumoraType::I32) {
+                        } else if (left_type == LumoraType::I32 && right_type == LumoraType::I64)
+                            || (left_type == LumoraType::I64 && right_type == LumoraType::I32)
+                        {
                             Ok(LumoraType::Bool)
                         } else {
                             Err(LumoraError::TypeError {
@@ -307,7 +314,8 @@ impl TypeChecker {
                         if arg_type != *expected_type {
                             if *expected_type == LumoraType::I32 && arg_type == LumoraType::I64 {
                                 if let Expr::Integer(n) = arg {
-                                    if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {} else {
+                                    if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {
+                                    } else {
                                         return Err(LumoraError::TypeError {
                                             code: "L025".to_string(),
                                             span: None,
@@ -402,7 +410,8 @@ impl TypeChecker {
                         return Err(LumoraError::TypeError {
                             code: "L035".to_string(),
                             span: None,
-                            message: "Array index must be an integer type (i32 or i64).".to_string(),
+                            message: "Array index must be an integer type (i32 or i64)."
+                                .to_string(),
                             help: None,
                         });
                     }
