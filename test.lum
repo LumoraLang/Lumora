@@ -1,7 +1,0 @@
-use lib.lum;
-ext fn printf_wrapper(string): i32;
-fn main(): i32 {
-    let result: i32 = fibonacci(10);
-    printf_wrapper("This is a test string from Lumora!");
-    return result;
-}

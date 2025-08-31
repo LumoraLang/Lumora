@@ -72,7 +72,7 @@ pub enum Token {
     Float(f64),
     #[regex(r"-?[0-9]+", |lex| lex.slice().parse().ok())]
     Integer(i32),
-    #[regex(r#""([^"\\]|\\.)*""#, |lex| lex.slice().to_owned())]
+    #[regex(r#""([^"\\]|\\.)*""#, |lex| { let s = lex.slice(); s[1..s.len()-1].to_owned() })]
     StringLiteral(String),
 }
 

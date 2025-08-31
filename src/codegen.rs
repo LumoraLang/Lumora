@@ -201,21 +201,26 @@ impl<'ctx> CodeGenerator<'ctx> {
             Expr::Float(f) => Ok(self.context.f64_type().const_float(*f).into()),
             Expr::Boolean(b) => Ok(self.context.bool_type().const_int(*b as u64, false).into()),
             Expr::StringLiteral(s) => {
-                let i8_type = self.context.i8_type();
-                let string_len = s.len() as u32 + 1;
-                let string_type = i8_type.array_type(string_len);
-                let string_constant = self.context.const_string(s.as_bytes(), true);
+                if s.is_empty() {
+                    // Return a null pointer for empty strings
+                    Ok(self.context.i8_type().ptr_type(0.into()).const_null().into())
+                } else {
+                    let i8_type = self.context.i8_type();
+                    let string_len = s.len() as u32 + 1;
+                    let string_type = i8_type.array_type(string_len);
+                    let string_constant = self.context.const_string(s.as_bytes(), true);
 
-                let global_string = self.module.add_global(
-                    string_type,
-                    Some(0.into()),
-                    "str_literal",
-                );
-                global_string.set_constant(true);
-                global_string.set_initializer(&string_constant);
-                global_string.set_linkage(Linkage::Private);
+                    let global_string = self.module.add_global(
+                        string_type,
+                        Some(0.into()),
+                        "str_literal",
+                    );
+                    global_string.set_constant(true);
+                    global_string.set_initializer(&string_constant);
+                    global_string.set_linkage(Linkage::Private);
 
-                Ok(global_string.as_pointer_value().into())
+                    Ok(global_string.as_pointer_value().into())
+                }
             }
             Expr::Identifier(name) => {
                 let (ptr, lumora_type) = self.variables.get(name).unwrap();
