@@ -3,6 +3,14 @@ use std::fs;
 use std::io;
 use std::path::PathBuf;
 
+#[derive(Debug, Deserialize, Serialize, Default)]
+pub enum OutputType {
+    #[default]
+    Executable,
+    SharedLibrary,
+    StaticLibrary,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BuildSettings {
     #[serde(default = "default_output_dir")]
@@ -13,6 +21,8 @@ pub struct BuildSettings {
     pub debug_info: bool,
     #[serde(default)]
     pub target_triple: String,
+    #[serde(default)]
+    pub output_type: OutputType,
 }
 
 impl Default for BuildSettings {
@@ -22,6 +32,7 @@ impl Default for BuildSettings {
             optimization_level: default_optimization_level(),
             debug_info: default_debug_info(),
             target_triple: String::new(),
+            output_type: OutputType::default(),
         }
     }
 }

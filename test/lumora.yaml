@@ -3,11 +3,11 @@ version: "0.1.0"
 authors:
   - "NEOAPPS <asd22.info@gmail.com>"
 description: "A test project for Lumora."
-
 build_settings:
   output_dir: "build"
   optimization_level: "O2"
   debug_info: false
+  output_type: Executable
 
 external_dependencies: []  # can be .c, .o, etc
 linker_settings:

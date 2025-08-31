@@ -353,6 +353,61 @@ impl TypeChecker {
                     })
                 }
             }
+            Expr::ArrayLiteral(elements) => {
+                if elements.is_empty() {
+                    return Err(LumoraError::TypeError {
+                        code: "L032".to_string(),
+                        span: None,
+                        message: "Empty array literals are not supported without explicit type annotation.".to_string(),
+                        help: None,
+                    });
+                }
+                let first_element_type = self.check_expression(&elements[0])?;
+                for element in elements.iter().skip(1) {
+                    let element_type = self.check_expression(element)?;
+                    if element_type != first_element_type {
+                        return Err(LumoraError::TypeError {
+                            code: "L033".to_string(),
+                            span: None,
+                            message: format!(
+                                "Array elements must have the same type: expected {:?}, found {:?}",
+                                first_element_type, element_type
+                            ),
+                            help: None,
+                        });
+                    }
+                }
+                Ok(LumoraType::Array(Box::new(first_element_type)))
+            }
+            Expr::ArrayIndex { array, index } => {
+                let array_type = self.check_expression(array)?;
+                let index_type = self.check_expression(index)?;
+
+                let element_type = match array_type {
+                    LumoraType::Array(inner_type) => *inner_type,
+                    LumoraType::String => LumoraType::I32,
+                    _ => {
+                        return Err(LumoraError::TypeError {
+                            code: "L034".to_string(),
+                            span: None,
+                            message: "Cannot index a non-array or non-string type.".to_string(),
+                            help: None,
+                        });
+                    }
+                };
+
+                match index_type {
+                    LumoraType::I32 | LumoraType::I64 => Ok(element_type),
+                    _ => {
+                        return Err(LumoraError::TypeError {
+                            code: "L035".to_string(),
+                            span: None,
+                            message: "Array index must be an integer type (i32 or i64).".to_string(),
+                            help: None,
+                        });
+                    }
+                }
+            }
         }
     }
 }

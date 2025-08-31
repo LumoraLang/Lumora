@@ -8,6 +8,7 @@ pub enum LumoraType {
     Bool,
     Void,
     String,
+    Array(Box<LumoraType>),
 }
 
 #[derive(Debug, Clone)]
@@ -32,6 +33,11 @@ pub enum Expr {
     Call {
         name: String,
         args: Vec<Expr>,
+    },
+    ArrayLiteral(Vec<Expr>),
+    ArrayIndex {
+        array: Box<Expr>,
+        index: Box<Expr>,
     },
 }
 

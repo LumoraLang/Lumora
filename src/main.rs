@@ -102,15 +102,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
     fs::write(&ll_file, llvm_ir)?;
 
-    let s_file = output_dir.join(format!(
-        "{}.s",
+    let o_file = output_dir.join(format!(
+        "{}.o",
         output_name.file_name().unwrap().to_str().unwrap()
     ));
     let mut llc_command = Command::new("llc");
     llc_command
         .arg(&ll_file)
         .arg("-o")
-        .arg(&s_file)
+        .arg(&o_file)
+        .arg("-filetype=obj")
         .arg("-relocation-model=pic");
 
     if !config.build_settings.optimization_level.is_empty() {
@@ -139,10 +140,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             String::from_utf8_lossy(&llc_output.stderr)
         );
 
-        if let Err(e) = fs::remove_file(&s_file) {
+        if let Err(e) = fs::remove_file(&o_file) {
             eprintln!(
-                "Warning: Could not delete temporary .s file {}: {}",
-                s_file.display(),
+                "Warning: Could not delete temporary .o file {}: {}",
+                o_file.display(),
                 e
             );
         }
@@ -199,45 +200,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let mut clang_command = Command::new("clang");
-    clang_command
-        .arg(&s_file)
-        .args(&imported_bc_files)
-        .args(&external_object_files)
-        .arg("-o")
-        .arg(&output_name);
+    let final_output_name = match config.build_settings.output_type {
+        lumora::config::OutputType::Executable => output_name.clone(),
+        lumora::config::OutputType::SharedLibrary => output_name.with_extension("so"),
+        lumora::config::OutputType::StaticLibrary => output_name.with_extension("a"),
+    };
 
-    for lib in &config.linker_settings.libraries {
-        clang_command.arg(format!("-l{}", lib));
-    }
-    clang_command.args(&config.linker_settings.flags);
+    let link_result = match config.build_settings.output_type {
+        lumora::config::OutputType::Executable | lumora::config::OutputType::SharedLibrary => {
+            let mut clang_command = Command::new("clang");
+            clang_command
+                .arg(&o_file)
+                .args(&imported_bc_files)
+                .args(&external_object_files)
+                .arg("-o")
+                .arg(&final_output_name);
 
-    if !config.build_settings.optimization_level.is_empty() {
-        clang_command.arg(format!("-{}", config.build_settings.optimization_level));
-    }
-    if config.build_settings.debug_info {
-        clang_command.arg("-g");
-    }
-    if !config.build_settings.target_triple.is_empty() {
-        clang_command.arg(format!("-target={}", config.build_settings.target_triple));
-    }
+            if let lumora::config::OutputType::SharedLibrary = config.build_settings.output_type {
+                clang_command.arg("-shared");
+            }
 
-    let clang_output = clang_command.output()?;
+            for lib in &config.linker_settings.libraries {
+                clang_command.arg(format!("-l{}", lib));
+            }
+            clang_command.args(&config.linker_settings.flags);
 
-    if let Err(e) = fs::remove_file(&s_file) {
+            if !config.build_settings.optimization_level.is_empty() {
+                clang_command.arg(format!("-{}", config.build_settings.optimization_level));
+            }
+            if config.build_settings.debug_info {
+                clang_command.arg("-g");
+            }
+            if !config.build_settings.target_triple.is_empty() {
+                clang_command.arg(format!("-target={}", config.build_settings.target_triple));
+            }
+
+            clang_command.output()?
+        }
+        lumora::config::OutputType::StaticLibrary => {
+            let mut ar_command = Command::new("ar");
+            ar_command
+                .arg("rcs")
+                .arg(&final_output_name)
+                .arg(&o_file)
+                .args(&external_object_files);
+
+            ar_command.output()?
+        }
+    };
+
+    if let Err(e) = fs::remove_file(&o_file) {
         eprintln!(
-            "Warning: Could not delete temporary .s file {}: {}",
-            s_file.display(),
+            "Warning: Could not delete temporary .o file {}: {}",
+            o_file.display(),
             e
         );
     }
 
-    if !clang_output.status.success() {
+    if !link_result.status.success() {
         eprintln!(
-            "clang failed: {}",
-            String::from_utf8_lossy(&clang_output.stderr)
+            "Linking failed: {}",
+            String::from_utf8_lossy(&link_result.stderr)
         );
-        return Err("clang compilation failed".into());
+        return Err("Linking failed".into());
     }
 
     for bc_file in &imported_bc_files {
@@ -253,7 +278,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "Compilation successful: {} -> {}",
         input_file,
-        output_name.display()
+        final_output_name.display()
     );
     Ok(())
 }

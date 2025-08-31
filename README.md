@@ -78,6 +78,14 @@ build_settings:
   # Default: ""
   target_triple: ""
 
+  # output_type: Specifies the type of output to generate.
+  # Possible values: "Executable", "SharedLibrary", "StaticLibrary".
+  # - "Executable": Generates a standalone executable (default).
+  # - "SharedLibrary": Generates a shared library (.so on Linux, .dylib on macOS, .dll on Windows).
+  # - "StaticLibrary": Generates a static library (.a on Linux/macOS, .lib on Windows).
+  # Default: "Executable"
+  output_type: "Executable"
+
 # Linker settings control how the compiled object files are linked into a final executable.
 linker_settings:
   # libraries: A list of system libraries to link against (e.g., "m" for math, "pthread" for pthreads).

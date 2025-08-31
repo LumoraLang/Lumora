@@ -198,9 +198,10 @@ impl<'ctx> CodeGenerator<'ctx> {
             Stmt::Return(expr) => {
                 if let Some(expr) = expr {
                     let val = self.generate_expression(expr)?;
-                    let returned_expr_type = self.type_of_basic_value(val);
                     let fn_val = self.builder.get_insert_block().unwrap().get_parent().unwrap();
                     let function_return_type = self.all_functions.get(&fn_val.get_name().to_str().unwrap().to_string()).unwrap().1.clone();
+
+                    let returned_expr_type = self.type_of_expression(expr)?;
 
                     let final_val = if returned_expr_type == LumoraType::I64 && function_return_type == LumoraType::I32 {
                         self.builder.build_int_truncate(val.into_int_value(), self.context.i32_type(), "trunc_i64_to_i32")?.into()
@@ -329,6 +330,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                     LumoraType::String => {
                         Ok(unsafe { inkwell::values::PointerValue::new(loaded_value_ref).into() })
                     }
+                    LumoraType::Array(_) => {
+                        Ok(unsafe { inkwell::values::PointerValue::new(loaded_value_ref).into() })
+                    }
                     LumoraType::Void => Err(LumoraError::CodegenError {
                         code: "L027".to_string(),
                         span: None,
@@ -341,8 +345,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let left_val = self.generate_expression(left)?;
                 let right_val = self.generate_expression(right)?;
 
-                let left_lumora_type = self.type_of_basic_value(left_val);
-                let right_lumora_type = self.type_of_basic_value(right_val);
+                let left_lumora_type = self.type_of_expression(left)?;
+                let right_lumora_type = self.type_of_expression(right)?;
 
                 if left_val.is_int_value() && right_val.is_int_value() {
                     let mut left_int_val = left_val.into_int_value();
@@ -542,6 +546,55 @@ impl<'ctx> CodeGenerator<'ctx> {
                     }
                 }
             }
+            Expr::ArrayLiteral(elements) => {
+                let element_type = self.type_of_expression(expr)?;
+                let LumoraType::Array(inner_type) = element_type else {
+                    return Err(LumoraError::CodegenError {
+                        code: "L036".to_string(),
+                        span: None,
+                        message: "Expected array type for array literal".to_string(),
+                        help: None,
+                    });
+                };
+                let llvm_element_type = self.type_to_llvm_type(&inner_type);
+                let array_type = llvm_element_type.array_type(elements.len() as u32);
+                let array_alloca = self.builder.build_alloca(array_type, "array_literal")?;
+
+                for (i, element_expr) in elements.iter().enumerate() {
+                    let element_val = self.generate_expression(element_expr)?;
+                    let index = self.context.i64_type().const_int(i as u64, false);
+                    let ptr = unsafe { self.builder.build_gep(llvm_element_type, array_alloca, &[self.context.i64_type().const_int(0, false), index], "array_element_ptr").unwrap() };
+                    self.builder.build_store(ptr, element_val)?;
+                }
+                Ok(array_alloca.into())
+            }
+            Expr::ArrayIndex { array, index } => {
+                let array_ptr = self.generate_expression(array)?.into_pointer_value();
+                let index_val = self.generate_expression(index)?.into_int_value();
+
+                let array_type = self.type_of_expression(array)?;
+                let (llvm_element_type, result_type) = match array_type {
+                    LumoraType::Array(inner_type) => (self.type_to_llvm_type(&inner_type), *inner_type),
+                    LumoraType::String => (self.context.i8_type().into(), LumoraType::I32),
+                    _ => {
+                        return Err(LumoraError::CodegenError {
+                            code: "L037".to_string(),
+                            span: None,
+                            message: "Cannot index a non-array or non-string type.".to_string(),
+                            help: None,
+                        });
+                    }
+                };
+
+                let ptr = unsafe { self.builder.build_gep(llvm_element_type, array_ptr, &[self.context.i64_type().const_int(0, false), index_val], "element_ptr").unwrap() };
+                let loaded_val = self.builder.build_load(llvm_element_type, ptr, "load_element")?;
+
+                if result_type == LumoraType::I32 && loaded_val.is_int_value() && loaded_val.into_int_value().get_type().get_bit_width() == 8 {
+                    Ok(self.builder.build_int_s_extend(loaded_val.into_int_value(), self.context.i32_type(), "sext_i8_to_i32")?.into())
+                } else {
+                    Ok(loaded_val.into())
+                }
+            }
         }
     }
 
@@ -555,27 +608,97 @@ impl<'ctx> CodeGenerator<'ctx> {
             LumoraType::Void => {
                 panic!("Void is not a basic type and cannot be converted to BasicTypeEnum")
             }
+            LumoraType::Array(inner_type) => self.type_to_llvm_type(inner_type).ptr_type(0.into()).into(),
         }
     }
 
-    fn type_of_basic_value(&self, value: BasicValueEnum<'ctx>) -> LumoraType {
-        if value.is_int_value() {
-            let int_value = value.into_int_value();
-            if int_value.get_type().get_bit_width() == 32 {
-                LumoraType::I32
-            } else if int_value.get_type().get_bit_width() == 64 {
-                LumoraType::I64
-            } else if int_value.get_type().get_bit_width() == 1 {
-                LumoraType::Bool
-            } else {
-                panic!("Unsupported integer bit width")
+    fn type_of_expression(&self, expr: &Expr) -> Result<LumoraType, LumoraError> {
+        match expr {
+            Expr::Integer(_) => Ok(LumoraType::I64),
+            Expr::Float(_) => Ok(LumoraType::F64),
+            Expr::Boolean(_) => Ok(LumoraType::Bool),
+            Expr::StringLiteral(_) => Ok(LumoraType::String),
+            Expr::Identifier(name) => {
+                self.variables
+                    .get(name)
+                    .map(|(_, ty)| ty.clone())
+                    .ok_or_else(|| LumoraError::CodegenError {
+                        code: "L038".to_string(),
+                        span: None,
+                        message: format!("Undefined variable: {}", name),
+                        help: None,
+                    })
             }
-        } else if value.is_float_value() {
-            LumoraType::F64
-        } else if value.is_pointer_value() {
-            LumoraType::String
-        } else {
-            panic!("Unsupported basic value type")
+            Expr::Binary { left, op, right } => {
+                let left_type = self.type_of_expression(left)?;
+                let right_type = self.type_of_expression(right)?;
+
+                match op {
+                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
+                        match (left_type, right_type) {
+                            (LumoraType::I32, LumoraType::I32) => Ok(LumoraType::I32),
+                            (LumoraType::I64, LumoraType::I64) => Ok(LumoraType::I64),
+                            (LumoraType::F64, LumoraType::F64) => Ok(LumoraType::F64),
+                            _ => Err(LumoraError::CodegenError {
+                                code: "L039".to_string(),
+                                span: None,
+                                message: "Arithmetic operations require operands of the same numeric type (i32 or f64)".to_string(),
+                                help: None,
+                            }),
+                        }
+                    }
+                    BinaryOp::Equal | BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::Greater => {
+                        if left_type == right_type {
+                            Ok(LumoraType::Bool)
+                        } else if (left_type == LumoraType::I32 && right_type == LumoraType::I64) ||
+                                  (left_type == LumoraType::I64 && right_type == LumoraType::I32) {
+                            Ok(LumoraType::Bool)
+                        } else {
+                            Err(LumoraError::CodegenError {
+                                code: "L040".to_string(),
+                                span: None,
+                                message: "Comparison requires same types".to_string(),
+                                help: None,
+                            })
+                        }
+                    }
+                }
+            }
+            Expr::Call { name, args: _ } => {
+                self.all_functions
+                    .get(name)
+                    .map(|(_, return_type)| return_type.clone())
+                    .ok_or_else(|| LumoraError::CodegenError {
+                        code: "L041".to_string(),
+                        span: None,
+                        message: format!("Undefined function: {}", name),
+                        help: None,
+                    })
+            }
+            Expr::ArrayLiteral(elements) => {
+                if elements.is_empty() {
+                    return Err(LumoraError::CodegenError {
+                        code: "L042".to_string(),
+                        span: None,
+                        message: "Empty array literals are not supported without explicit type annotation.".to_string(),
+                        help: None,
+                    });
+                }
+                let first_element_type = self.type_of_expression(&elements[0])?;
+                Ok(LumoraType::Array(Box::new(first_element_type)))
+            }
+            Expr::ArrayIndex { array, index: _ } => {
+                let array_type = self.type_of_expression(array)?;
+                let LumoraType::Array(inner_type) = array_type else {
+                    return Err(LumoraError::CodegenError {
+                        code: "L043".to_string(),
+                        span: None,
+                        message: "Cannot index a non-array type.".to_string(),
+                        help: None,
+                    });
+                };
+                Ok(*inner_type)
+            }
         }
     }
 }

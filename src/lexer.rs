@@ -3,6 +3,8 @@ use logos::{Lexer, Logos};
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {
     #[regex(r"[ \t\n\f]+", logos::skip)]
+    #[regex(r"//[^\n]*", logos::skip)]
+    #[regex(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", logos::skip)]
     Error,
     #[token("fn")]
     Fn,
@@ -48,6 +50,10 @@ pub enum Token {
     LeftBrace,
     #[token("}")]
     RightBrace,
+    #[token("[")]
+    LeftBracket,
+    #[token("]")]
+    RightBracket,
     #[token(";")]
     Semicolon,
     #[token(",")]
@@ -87,7 +93,7 @@ pub enum Token {
         }
     })]
     Integer(i64),
-    #[regex(r#""([^"\\]|\\.)*""#, |lex| parse_string_literal(lex))]
+    #[regex(r#""([^"\\]|\\.)*"|'([^'\\]|\\.)*'"#, |lex| parse_string_literal(lex))]
     StringLiteral(String),
 }
 

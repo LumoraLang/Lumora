@@ -244,7 +244,7 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Result<LumoraType, LumoraError> {
-        match self.advance() {
+        let base_type = match self.advance() {
             Some(spanned_token) => match &spanned_token.value {
                 Token::I32Type => Ok(LumoraType::I32),
                 Token::I64Type => Ok(LumoraType::I64),
@@ -269,6 +269,14 @@ impl Parser {
                 message: "Unexpected end of input while expecting a type".to_string(),
                 help: None,
             }),
+        }?;
+
+        if matches!(self.peek().map(|s| &s.value), Some(Token::LeftBracket)) {
+            self.expect(&Token::LeftBracket)?;
+            self.expect(&Token::RightBracket)?;
+            Ok(LumoraType::Array(Box::new(base_type)))
+        } else {
+            Ok(base_type)
         }
     }
 
@@ -546,8 +554,7 @@ impl Parser {
     }
 
     fn parse_primary(&mut self) -> Result<Expr, LumoraError> {
-        let spanned_token = self.advance();
-        match spanned_token {
+        let mut expr = match self.advance() {
             Some(spanned_token) => match &spanned_token.value {
                 Token::Integer(n) => Ok(Expr::Integer(*n)),
                 Token::Float(f) => Ok(Expr::Float(*f)),
@@ -578,6 +585,17 @@ impl Parser {
                     self.expect(&Token::RightParen)?;
                     Ok(expr)
                 }
+                Token::LeftBracket => {
+                    let mut elements = Vec::new();
+                    while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBracket)) {
+                        elements.push(self.parse_expression()?);
+                        if matches!(self.peek().map(|s| &s.value), Some(Token::Comma)) {
+                            self.advance();
+                        }
+                    }
+                    self.expect(&Token::RightBracket)?;
+                    Ok(Expr::ArrayLiteral(elements))
+                }
                 _ => Err(LumoraError::ParseError {
                     code: "L016".to_string(),
                     span: Some(Span::new(
@@ -595,7 +613,19 @@ impl Parser {
                 message: "Unexpected end of input while expecting an expression".to_string(),
                 help: None,
             }),
+        }?;
+
+        while matches!(self.peek().map(|s| &s.value), Some(Token::LeftBracket)) {
+            self.expect(&Token::LeftBracket)?;
+            let index = self.parse_expression()?;
+            self.expect(&Token::RightBracket)?;
+            expr = Expr::ArrayIndex {
+                array: Box::new(expr),
+                index: Box::new(index),
+            };
         }
+
+        Ok(expr)
     }
 
     fn parse_use_statement(&mut self) -> Result<String, LumoraError> {

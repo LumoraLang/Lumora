@@ -1,0 +1,6 @@
+fn main(): i32 {
+    // This is a single-line comment
+    let x: i32 = 10; /* This is a multi-line comment
+                        that spans multiple lines */
+    return x; // Another single-line comment
+}
