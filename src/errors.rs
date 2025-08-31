@@ -53,6 +53,11 @@ pub enum LumoraError {
         message: String,
         help: Option<String>,
     },
+    #[error("ConfigurationError: {message}")]
+    ConfigurationError {
+        message: String,
+        help: Option<String>,
+    },
 }
 
 impl From<inkwell::builder::BuilderError> for LumoraError {
