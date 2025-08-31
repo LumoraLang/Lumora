@@ -12,3 +12,4 @@ llvm-sys = "181.2.0"
 inkwell = { version = "0.6.0", features = ["llvm18-1"] }
 serde_yaml = "0.9.34"
 clap = { version = "4.5.11", features = ["derive"] }
+dirs = "5.0.1"

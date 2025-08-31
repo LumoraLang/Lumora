@@ -1,0 +1,5 @@
+- [ ] add argc and argv
+- [ ] write and stdlib
+- [ ] write more libs
+- [ ] dependency manager (even if git)
+- [ ] f32 probably

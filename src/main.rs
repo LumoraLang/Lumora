@@ -1,4 +1,5 @@
 use clap::Parser;
+use dirs;
 use logos::Logos;
 use lumora::compile_lumora;
 use lumora::config::{OutputType, load_config};
@@ -92,7 +93,10 @@ fn run() -> Result<(), LumoraError> {
     } else {
         load_config("lumora.yaml").map_err(|e| LumoraError::ConfigurationError {
             message: format!("Could not load lumora.yaml: {}", e),
-            help: Some("Ensure lumora.yaml exists in the current directory or specify a path with --config.".to_string()),
+            help: Some(
+                "Ensure lumora.yaml exists in the current directory or specify a path with --config."
+                    .to_string(),
+            ),
         })?
     };
 
@@ -151,7 +155,7 @@ fn run() -> Result<(), LumoraError> {
 
     let mut imported_bc_files = Vec::new();
     for module_name in &program.uses {
-        let imported_lum_file = PathBuf::from(module_name);
+        let imported_lum_file = resolve_module_path(module_name, Path::new(input_file))?;
         let imported_output_name = format!("imported_{}", module_name);
         let imported_source_code = fs::read_to_string(&imported_lum_file).map_err(|e| {
             LumoraError::ConfigurationError {
@@ -353,7 +357,7 @@ fn run() -> Result<(), LumoraError> {
                 if let Some(target_triple) = effective_target_triple {
                     clang_compile_command.arg(format!("-target={}", target_triple));
                 }
-                clang_compile_command.arg("-fPIE");
+                clang_compile_command.arg("-fPIE"); // TODO: add an option to disable this
                 let compile_output =
                     clang_compile_command
                         .output()
@@ -513,11 +517,45 @@ fn run() -> Result<(), LumoraError> {
     }
 
     println!(
-        "Compilation successful: {} -> {}",
+        "{} -> {}",
         input_file.display(),
         final_output_name.display()
     );
     Ok(())
+}
+
+fn resolve_module_path(module_name: &str, current_file: &Path) -> Result<PathBuf, LumoraError> {
+    let mut search_paths = Vec::new();
+    if let Some(parent) = current_file.parent() {
+        search_paths.push(parent.to_path_buf());
+    }
+
+    search_paths.push(PathBuf::from("/usr/share/lumora/"));
+    if let Some(parent) = current_file.parent() {
+        search_paths.push(parent.join(".lumora"))
+    }
+    if let Some(home_dir) = dirs::home_dir() {
+        search_paths.push(home_dir.join(".lumora"));
+    }
+
+    for path in search_paths {
+        let mut p = path.join(module_name);
+        if p.exists() {
+            return Ok(p);
+        }
+        p.set_extension("lum");
+        if p.exists() {
+            return Ok(p);
+        }
+    }
+
+    Err(LumoraError::ConfigurationError {
+        message: format!("Module '{}' not found.", module_name),
+        help: Some(
+            "Ensure the module exists in the current directory, /usr/share/lumora/, or ~/.lumora."
+                .to_string(),
+        ),
+    })
 }
 
 #[cfg(test)]
@@ -527,8 +565,8 @@ mod tests {
     #[test]
     fn test_basic_function() {
         let source = r###" 
-            fn main() i32 {
-                let x i32 = 42;
+            fn main(): i32 {
+                let x: i32 = 42;
                 return x;
             }
         "###;
@@ -540,7 +578,7 @@ mod tests {
     #[test]
     fn test_arithmetic() {
         let source = r###" 
-            fn add(a i32, b i32) i32 {
+            fn add(a i32, b i32): i32 {
                 return a + b;
             }
         "###;

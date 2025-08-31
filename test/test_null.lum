@@ -1,17 +1,17 @@
-ext fn printf(string): void;
+use lib;
 fn main(): i32 {
     let s: string = null;
     let t: string = "hello";
     if s == null {
-        printf("s is null.\n");
+        print("s is null.\n");
         return 0;
     }
 
     if t == null {
-        printf("t is null.\n");
+        print("t is null.\n");
         return 0;
     }
     
-    printf("neither are null.\n");
+    print("neither are null.\n");
     return 0;
 }

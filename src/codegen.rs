@@ -316,11 +316,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             Expr::Null => Ok(self.context.ptr_type(0.into()).const_null().into()),
             Expr::StringLiteral(s) => {
                 if s.is_empty() {
-                    Ok(self
-                        .context
-                        .ptr_type(0.into())
-                        .const_null()
-                        .into())
+                    Ok(self.context.ptr_type(0.into()).const_null().into())
                 } else {
                     let i8_type = self.context.i8_type();
                     let string_len = s.len() as u32 + 1;
@@ -518,7 +514,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                             )?
                             .into()),
                     }
-                } else if (left_lumora_type == LumoraType::Null || right_lumora_type == LumoraType::Null)
+                } else if (left_lumora_type == LumoraType::Null
+                    || right_lumora_type == LumoraType::Null)
                     && (matches!(op, BinaryOp::Equal) || matches!(op, BinaryOp::NotEqual))
                 {
                     let (val1, type1) = (left_val, left_lumora_type);
@@ -526,23 +523,45 @@ impl<'ctx> CodeGenerator<'ctx> {
                     let result = if type1 == LumoraType::Null {
                         if val2.is_pointer_value() {
                             if matches!(op, BinaryOp::Equal) {
-                                self.builder.build_is_null(val2.into_pointer_value(), "is_null")?
+                                self.builder
+                                    .build_is_null(val2.into_pointer_value(), "is_null")?
                             } else {
-                                self.builder.build_is_not_null(val2.into_pointer_value(), "is_not_null")?
+                                self.builder
+                                    .build_is_not_null(val2.into_pointer_value(), "is_not_null")?
                             }
                         } else if val2.is_int_value() {
                             let zero = val2.into_int_value().get_type().const_int(0, false);
                             if matches!(op, BinaryOp::Equal) {
-                                self.builder.build_int_compare(IntPredicate::EQ, val2.into_int_value(), zero, "eq_null")?
+                                self.builder.build_int_compare(
+                                    IntPredicate::EQ,
+                                    val2.into_int_value(),
+                                    zero,
+                                    "eq_null",
+                                )?
                             } else {
-                                self.builder.build_int_compare(IntPredicate::NE, val2.into_int_value(), zero, "ne_null")?
+                                self.builder.build_int_compare(
+                                    IntPredicate::NE,
+                                    val2.into_int_value(),
+                                    zero,
+                                    "ne_null",
+                                )?
                             }
                         } else if val2.is_float_value() {
                             let zero = val2.into_float_value().get_type().const_float(0.0);
                             if matches!(op, BinaryOp::Equal) {
-                                self.builder.build_float_compare(inkwell::FloatPredicate::OEQ, val2.into_float_value(), zero, "eq_null_f")?
+                                self.builder.build_float_compare(
+                                    inkwell::FloatPredicate::OEQ,
+                                    val2.into_float_value(),
+                                    zero,
+                                    "eq_null_f",
+                                )?
                             } else {
-                                self.builder.build_float_compare(inkwell::FloatPredicate::ONE, val2.into_float_value(), zero, "ne_null_f")?
+                                self.builder.build_float_compare(
+                                    inkwell::FloatPredicate::ONE,
+                                    val2.into_float_value(),
+                                    zero,
+                                    "ne_null_f",
+                                )?
                             }
                         } else {
                             return Err(LumoraError::CodegenError {
@@ -555,23 +574,45 @@ impl<'ctx> CodeGenerator<'ctx> {
                     } else if type2 == LumoraType::Null {
                         if val1.is_pointer_value() {
                             if matches!(op, BinaryOp::Equal) {
-                                self.builder.build_is_null(val1.into_pointer_value(), "is_null")?
+                                self.builder
+                                    .build_is_null(val1.into_pointer_value(), "is_null")?
                             } else {
-                                self.builder.build_is_not_null(val1.into_pointer_value(), "is_not_null")?
+                                self.builder
+                                    .build_is_not_null(val1.into_pointer_value(), "is_not_null")?
                             }
                         } else if val1.is_int_value() {
                             let zero = val1.into_int_value().get_type().const_int(0, false);
                             if matches!(op, BinaryOp::Equal) {
-                                self.builder.build_int_compare(IntPredicate::EQ, val1.into_int_value(), zero, "eq_null")?
+                                self.builder.build_int_compare(
+                                    IntPredicate::EQ,
+                                    val1.into_int_value(),
+                                    zero,
+                                    "eq_null",
+                                )?
                             } else {
-                                self.builder.build_int_compare(IntPredicate::NE, val1.into_int_value(), zero, "ne_null")?
+                                self.builder.build_int_compare(
+                                    IntPredicate::NE,
+                                    val1.into_int_value(),
+                                    zero,
+                                    "ne_null",
+                                )?
                             }
                         } else if val1.is_float_value() {
                             let zero = val1.into_float_value().get_type().const_float(0.0);
                             if matches!(op, BinaryOp::Equal) {
-                                self.builder.build_float_compare(inkwell::FloatPredicate::OEQ, val1.into_float_value(), zero, "eq_null_f")?
+                                self.builder.build_float_compare(
+                                    inkwell::FloatPredicate::OEQ,
+                                    val1.into_float_value(),
+                                    zero,
+                                    "eq_null_f",
+                                )?
                             } else {
-                                self.builder.build_float_compare(inkwell::FloatPredicate::ONE, val1.into_float_value(), zero, "ne_null_f")?
+                                self.builder.build_float_compare(
+                                    inkwell::FloatPredicate::ONE,
+                                    val1.into_float_value(),
+                                    zero,
+                                    "ne_null_f",
+                                )?
                             }
                         } else {
                             return Err(LumoraError::CodegenError {
@@ -732,9 +773,10 @@ impl<'ctx> CodeGenerator<'ctx> {
             LumoraType::Void => {
                 panic!("Void is not a basic type and cannot be converted to BasicTypeEnum")
             }
-            LumoraType::Array(inner_type) => {
-                self.type_to_llvm_type(inner_type).into_pointer_type().into()
-            }
+            LumoraType::Array(inner_type) => self
+                .type_to_llvm_type(inner_type)
+                .into_pointer_type()
+                .into(),
             LumoraType::Null => self.context.ptr_type(0.into()).into(),
         }
     }

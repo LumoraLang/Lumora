@@ -644,6 +644,12 @@ impl Parser {
                     Token::Identifier(name) => {
                         module_path.push_str(name);
                     }
+                    Token::Divide => {
+                        module_path.push('/');
+                    }
+                    Token::Dot => {
+                        module_path.push('/');
+                    }
                     _ => {
                         return Err(LumoraError::ParseError {
                             code: "L031".to_string(),
@@ -652,7 +658,8 @@ impl Parser {
                                 self.file_name.clone(),
                                 &self.source_code,
                             )),
-                            message: "Expected identifier in use statement".to_string(),
+                            message: "Expected identifier, slash, or dot in use statement"
+                                .to_string(),
                             help: None,
                         });
                     }
@@ -667,14 +674,12 @@ impl Parser {
                 }
             }
 
-            if matches!(self.peek().map(|s| &s.value), Some(Token::Dot)) {
-                self.advance();
-                module_path.push('.');
-            } else {
+            if matches!(self.peek().map(|s| &s.value), Some(Token::Semicolon)) {
                 break;
             }
         }
         self.expect(&Token::Semicolon)?;
+        module_path.push_str(".lum");
         Ok(module_path)
     }
 }
