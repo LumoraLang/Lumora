@@ -202,7 +202,6 @@ impl<'ctx> CodeGenerator<'ctx> {
             Expr::Boolean(b) => Ok(self.context.bool_type().const_int(*b as u64, false).into()),
             Expr::StringLiteral(s) => {
                 if s.is_empty() {
-                    // Return a null pointer for empty strings
                     Ok(self.context.i8_type().ptr_type(0.into()).const_null().into())
                 } else {
                     let i8_type = self.context.i8_type();
