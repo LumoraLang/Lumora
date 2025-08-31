@@ -3,3 +3,4 @@
 - [ ] write more libs
 - [ ] dependency manager (even if git)
 - [ ] f32 probably
+- [ ] resolve all //TODOs in the code
