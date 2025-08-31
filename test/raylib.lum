@@ -9,7 +9,7 @@ fn main(): i32 {
     InitWindow(800, 600, "Lumora + Raylib");
     while WindowShouldClose() == 0 {
         BeginDrawing();
-        ClearBackground(0xFFFFFFFF);
+        ClearBackground(0x000000000);
         DrawText("Hello from Lumora!", 190, 200, 20, 0xD3D3D3FF);
         EndDrawing();
     }
