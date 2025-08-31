@@ -1,0 +1,17 @@
+ext fn printf(string): void;
+fn main(): i32 {
+    let s: string = null;
+    let t: string = "hello";
+    if s == null {
+        printf("s is null.\n");
+        return 0;
+    }
+
+    if t == null {
+        printf("t is null.\n");
+        return 0;
+    }
+    
+    printf("neither are null.\n");
+    return 0;
+}

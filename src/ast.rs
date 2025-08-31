@@ -9,6 +9,7 @@ pub enum LumoraType {
     Void,
     String,
     Array(Box<LumoraType>),
+    Null,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +40,7 @@ pub enum Expr {
         array: Box<Expr>,
         index: Box<Expr>,
     },
+    Null,
 }
 
 #[derive(Debug, Clone)]

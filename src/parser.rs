@@ -565,6 +565,7 @@ impl Parser {
                 Token::Float(f) => Ok(Expr::Float(*f)),
                 Token::True => Ok(Expr::Boolean(true)),
                 Token::False => Ok(Expr::Boolean(false)),
+                Token::Null => Ok(Expr::Null),
                 Token::StringLiteral(s) => Ok(Expr::StringLiteral(s.clone())),
                 Token::Identifier(name_token) => {
                     let name = name_token.clone();

@@ -78,7 +78,6 @@ struct Cli {
 
 fn run() -> Result<(), LumoraError> {
     let cli = Cli::parse();
-
     let config = if let Some(config_path) = cli.config {
         load_config(&config_path.to_string_lossy()).map_err(|e| {
             LumoraError::ConfigurationError {

@@ -42,6 +42,8 @@ pub enum Token {
     True,
     #[token("false")]
     False,
+    #[token("null")]
+    Null,
     #[token("(")]
     LeftParen,
     #[token(")")]

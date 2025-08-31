@@ -123,7 +123,19 @@ impl TypeChecker {
                 value,
             } => {
                 let value_type = self.check_expression(value)?;
-                if *ty != value_type {
+                if value_type == LumoraType::Null {
+                    if !matches!(*ty, LumoraType::String | LumoraType::Array(_)) {
+                        return Err(LumoraError::TypeError {
+                            code: "L019".to_string(),
+                            span: None,
+                            message: format!(
+                                "Type mismatch: cannot assign null to non-pointer type {:?}",
+                                ty
+                            ),
+                            help: None,
+                        });
+                    }
+                } else if *ty != value_type {
                     if *ty == LumoraType::I32 && value_type == LumoraType::I64 {
                         if let Expr::Integer(n) = value {
                             if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {
@@ -246,6 +258,7 @@ impl TypeChecker {
             Expr::Float(_) => Ok(LumoraType::F64),
             Expr::Boolean(_) => Ok(LumoraType::Bool),
             Expr::StringLiteral(_) => Ok(LumoraType::String),
+            Expr::Null => Ok(LumoraType::Null),
             Expr::Identifier(name) => {
                 self.variables
                     .get(name)
@@ -276,7 +289,10 @@ impl TypeChecker {
                         }
                     }
                     BinaryOp::Equal | BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::Greater => {
-                        if left_type == right_type {
+                        if left_type == right_type
+                            || left_type == LumoraType::Null
+                            || right_type == LumoraType::Null
+                        {
                             Ok(LumoraType::Bool)
                         } else if (left_type == LumoraType::I32 && right_type == LumoraType::I64)
                             || (left_type == LumoraType::I64 && right_type == LumoraType::I32)
@@ -286,7 +302,7 @@ impl TypeChecker {
                             Err(LumoraError::TypeError {
                                 code: "L023".to_string(),
                                 span: None,
-                                message: "Comparison requires same types".to_string(),
+                                message: "Comparison requires compatible types".to_string(),
                                 help: None,
                             })
                         }
