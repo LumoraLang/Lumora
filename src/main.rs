@@ -19,11 +19,18 @@ fn main() {
             LumoraError::CodegenError { span, .. } => span.as_ref(),
             LumoraError::ConfigurationError { .. } => None,
         } {
-            eprintln!("     --> {}:{}:{}", span.file, span.start_line, span.start_column);
+            eprintln!(
+                "     --> {}:{}:{}",
+                span.file, span.start_line, span.start_column
+            );
             if let Some(snippet) = &span.snippet {
                 eprintln!("      |");
                 eprintln!("{:4}  | {}", span.start_line, snippet.as_str());
-                eprintln!("      | {}{}", " ".repeat(span.start_column - 1), "^".repeat(span.end_column - span.start_column));
+                eprintln!(
+                    "      | {}{}",
+                    " ".repeat(span.start_column - 1),
+                    "^".repeat(span.end_column - span.start_column)
+                );
             }
         }
         if let Some(help) = match &e {
@@ -73,9 +80,15 @@ fn run() -> Result<(), LumoraError> {
     let cli = Cli::parse();
 
     let config = if let Some(config_path) = cli.config {
-        load_config(&config_path.to_string_lossy()).map_err(|e| LumoraError::ConfigurationError {
-            message: format!("Could not load config file {}: {}", config_path.display(), e),
-            help: Some("Ensure the config file exists and is valid YAML.".to_string()),
+        load_config(&config_path.to_string_lossy()).map_err(|e| {
+            LumoraError::ConfigurationError {
+                message: format!(
+                    "Could not load config file {}: {}",
+                    config_path.display(),
+                    e
+                ),
+                help: Some("Ensure the config file exists and is valid YAML.".to_string()),
+            }
         })?
     } else {
         load_config("lumora.yaml").map_err(|e| LumoraError::ConfigurationError {
@@ -86,8 +99,14 @@ fn run() -> Result<(), LumoraError> {
 
     let output_dir = &config.build_settings.output_dir;
     fs::create_dir_all(output_dir).map_err(|e| LumoraError::ConfigurationError {
-        message: format!("Could not create output directory {}: {}", output_dir.display(), e),
-        help: Some("Ensure you have write permissions to the specified output directory.".to_string()),
+        message: format!(
+            "Could not create output directory {}: {}",
+            output_dir.display(),
+            e
+        ),
+        help: Some(
+            "Ensure you have write permissions to the specified output directory.".to_string(),
+        ),
     })?;
 
     let input_file = &cli.input_file;
@@ -101,10 +120,11 @@ fn run() -> Result<(), LumoraError> {
             .unwrap_or_else(|| output_dir.join("a.out"))
     };
 
-    let source_code = fs::read_to_string(input_file).map_err(|e| LumoraError::ConfigurationError {
-        message: format!("Could not read input file {}: {}", input_file.display(), e),
-        help: Some("Ensure the input file exists and you have read permissions.".to_string()),
-    })?;
+    let source_code =
+        fs::read_to_string(input_file).map_err(|e| LumoraError::ConfigurationError {
+            message: format!("Could not read input file {}: {}", input_file.display(), e),
+            help: Some("Ensure the input file exists and you have read permissions.".to_string()),
+        })?;
     let mut lexer = Token::lexer(&source_code).spanned();
     let mut tokens = Vec::new();
     while let Some((token_result, span)) = lexer.next() {
@@ -134,22 +154,39 @@ fn run() -> Result<(), LumoraError> {
     for module_name in &program.uses {
         let imported_lum_file = PathBuf::from(module_name);
         let imported_output_name = format!("imported_{}", module_name);
-        let imported_source_code = fs::read_to_string(&imported_lum_file).map_err(|e| LumoraError::ConfigurationError {
-            message: format!("Could not read imported file {}: {}", imported_lum_file.display(), e),
-            help: Some("Ensure the imported file exists and you have read permissions.".to_string()),
+        let imported_source_code = fs::read_to_string(&imported_lum_file).map_err(|e| {
+            LumoraError::ConfigurationError {
+                message: format!(
+                    "Could not read imported file {}: {}",
+                    imported_lum_file.display(),
+                    e
+                ),
+                help: Some(
+                    "Ensure the imported file exists and you have read permissions.".to_string(),
+                ),
+            }
         })?;
         let imported_llvm_ir = compile_lumora(&imported_source_code)?;
         let imported_ll_file = output_dir.join(format!("{}.ll", imported_output_name));
-        fs::write(&imported_ll_file, imported_llvm_ir).map_err(|e| LumoraError::ConfigurationError {
-            message: format!("Could not write temporary .ll file {}: {}", imported_ll_file.display(), e),
-            help: Some("Ensure you have write permissions to the output directory.".to_string()),
+        fs::write(&imported_ll_file, imported_llvm_ir).map_err(|e| {
+            LumoraError::ConfigurationError {
+                message: format!(
+                    "Could not write temporary .ll file {}: {}",
+                    imported_ll_file.display(),
+                    e
+                ),
+                help: Some(
+                    "Ensure you have write permissions to the output directory.".to_string(),
+                ),
+            }
         })?;
         let imported_bc_file = output_dir.join(format!("{}.bc", imported_output_name));
         let llvm_as_output = Command::new("llvm-as")
             .arg(&imported_ll_file)
             .arg("-o")
             .arg(&imported_bc_file)
-            .output().map_err(|e| LumoraError::CodegenError {
+            .output()
+            .map_err(|e| LumoraError::CodegenError {
                 code: "L007".to_string(),
                 span: None,
                 message: format!("Failed to execute llvm-as: {}", e),
@@ -166,7 +203,10 @@ fn run() -> Result<(), LumoraError> {
                 code: "L003".to_string(),
                 span: None,
                 message: "llvm-as compilation failed".to_string(),
-                help: Some(format!("Check the output from llvm-as: {}", String::from_utf8_lossy(&llvm_as_output.stderr))),
+                help: Some(format!(
+                    "Check the output from llvm-as: {}",
+                    String::from_utf8_lossy(&llvm_as_output.stderr)
+                )),
             });
         }
 
@@ -186,7 +226,11 @@ fn run() -> Result<(), LumoraError> {
         output_name.file_name().unwrap().to_str().unwrap()
     ));
     fs::write(&ll_file, llvm_ir).map_err(|e| LumoraError::ConfigurationError {
-        message: format!("Could not write temporary .ll file {}: {}", ll_file.display(), e),
+        message: format!(
+            "Could not write temporary .ll file {}: {}",
+            ll_file.display(),
+            e
+        ),
         help: Some("Ensure you have write permissions to the output directory.".to_string()),
     })?;
 
@@ -230,12 +274,14 @@ fn run() -> Result<(), LumoraError> {
         llc_command.arg(format!("-mtriple={}", target_triple));
     }
 
-    let llc_output = llc_command.output().map_err(|e| LumoraError::CodegenError {
-        code: "L008".to_string(),
-        span: None,
-        message: format!("Failed to execute llc: {}", e),
-        help: Some("Ensure llc is installed and in your PATH.".to_string()),
-    })?;
+    let llc_output = llc_command
+        .output()
+        .map_err(|e| LumoraError::CodegenError {
+            code: "L008".to_string(),
+            span: None,
+            message: format!("Failed to execute llc: {}", e),
+            help: Some("Ensure llc is installed and in your PATH.".to_string()),
+        })?;
 
     if let Err(e) = fs::remove_file(&ll_file) {
         eprintln!(
@@ -262,7 +308,10 @@ fn run() -> Result<(), LumoraError> {
             code: "L004".to_string(),
             span: None,
             message: "llc compilation failed".to_string(),
-            help: Some(format!("Check the output from llc: {}", String::from_utf8_lossy(&llc_output.stderr))),
+            help: Some(format!(
+                "Check the output from llc: {}",
+                String::from_utf8_lossy(&llc_output.stderr)
+            )),
         });
     }
 
@@ -306,12 +355,18 @@ fn run() -> Result<(), LumoraError> {
                     clang_compile_command.arg(format!("-target={}", target_triple));
                 }
                 clang_compile_command.arg("-fPIE");
-                let compile_output = clang_compile_command.output().map_err(|e| LumoraError::CodegenError {
-                    code: "L009".to_string(),
-                    span: None,
-                    message: format!("Failed to execute clang for external dependency: {}", e),
-                    help: Some("Ensure clang is installed and in your PATH.".to_string()),
-                })?;
+                let compile_output =
+                    clang_compile_command
+                        .output()
+                        .map_err(|e| LumoraError::CodegenError {
+                            code: "L009".to_string(),
+                            span: None,
+                            message: format!(
+                                "Failed to execute clang for external dependency: {}",
+                                e
+                            ),
+                            help: Some("Ensure clang is installed and in your PATH.".to_string()),
+                        })?;
                 if !compile_output.status.success() {
                     eprintln!(
                         "clang compilation of {} failed: {}",
@@ -319,11 +374,14 @@ fn run() -> Result<(), LumoraError> {
                         String::from_utf8_lossy(&compile_output.stderr)
                     );
                     return Err(LumoraError::CodegenError {
-                    code: "L005".to_string(),
-                    span: None,
-                    message: "External C/C++ compilation failed".to_string(),
-                    help: Some(format!("Check the output from clang: {}", String::from_utf8_lossy(&compile_output.stderr))),
-                });
+                        code: "L005".to_string(),
+                        span: None,
+                        message: "External C/C++ compilation failed".to_string(),
+                        help: Some(format!(
+                            "Check the output from clang: {}",
+                            String::from_utf8_lossy(&compile_output.stderr)
+                        )),
+                    });
                 }
                 external_object_files.push(obj_file);
             } else if ext == "o" || ext == "a" {
@@ -395,12 +453,14 @@ fn run() -> Result<(), LumoraError> {
                 clang_command.arg(format!("-target={}", target_triple));
             }
 
-            clang_command.output().map_err(|e| LumoraError::CodegenError {
-                code: "L010".to_string(),
-                span: None,
-                message: format!("Failed to execute clang for linking: {}", e),
-                help: Some("Ensure clang is installed and in your PATH.".to_string()),
-            })?
+            clang_command
+                .output()
+                .map_err(|e| LumoraError::CodegenError {
+                    code: "L010".to_string(),
+                    span: None,
+                    message: format!("Failed to execute clang for linking: {}", e),
+                    help: Some("Ensure clang is installed and in your PATH.".to_string()),
+                })?
         }
         OutputType::StaticLibrary => {
             let mut ar_command = Command::new("ar");
@@ -436,7 +496,10 @@ fn run() -> Result<(), LumoraError> {
             code: "L006".to_string(),
             span: None,
             message: "Linking failed".to_string(),
-            help: Some(format!("Check the output from the linker: {}", String::from_utf8_lossy(&link_result.stderr))),
+            help: Some(format!(
+                "Check the output from the linker: {}",
+                String::from_utf8_lossy(&link_result.stderr)
+            )),
         });
     }
 
