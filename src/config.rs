@@ -26,9 +26,15 @@ impl Default for BuildSettings {
     }
 }
 
-fn default_output_dir() -> PathBuf { "build".into() }
-fn default_optimization_level() -> String { "O0".to_string() }
-fn default_debug_info() -> bool { true }
+fn default_output_dir() -> PathBuf {
+    "build".into()
+}
+fn default_optimization_level() -> String {
+    "O0".to_string()
+}
+fn default_debug_info() -> bool {
+    true
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LinkerSettings {
@@ -64,8 +70,12 @@ impl Default for TestSettings {
     }
 }
 
-fn default_run_tests_on_build() -> bool { true }
-fn default_test_dir() -> PathBuf { "tests".into() }
+fn default_run_tests_on_build() -> bool {
+    true
+}
+fn default_test_dir() -> PathBuf {
+    "tests".into()
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LumoraConfig {
@@ -106,13 +116,23 @@ impl Default for LumoraConfig {
     }
 }
 
-fn default_project_name() -> String { "default_lumora_project".to_string() }
-fn default_version() -> String { "0.1.0".to_string() }
-fn default_description() -> String { "A Lumora project.".to_string() }
+fn default_project_name() -> String {
+    "default_lumora_project".to_string()
+}
+fn default_version() -> String {
+    "0.1.0".to_string()
+}
+fn default_description() -> String {
+    "A Lumora project.".to_string()
+}
 
 pub fn load_config(path: &str) -> Result<LumoraConfig, io::Error> {
     let content = fs::read_to_string(path)?;
-    let config: LumoraConfig = serde_yaml::from_str(&content)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("Failed to parse lumora.yaml: {}", e)))?;
+    let config: LumoraConfig = serde_yaml::from_str(&content).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Failed to parse lumora.yaml: {}", e),
+        )
+    })?;
     Ok(config)
 }

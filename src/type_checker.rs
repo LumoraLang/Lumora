@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use crate::ast::{BinaryOp, Expr, Function, LumoraType, Program, Stmt, TopLevelDeclaration};
 use crate::errors::{LumoraError, Span};
-use crate::ast::{LumoraType, Expr, BinaryOp, Stmt, Function, Program, TopLevelDeclaration};
+use crate::lexer::{Spanned, Token};
 use crate::parser::Parser;
-use crate::lexer::{Token, Spanned};
 use logos::Logos;
+use std::collections::HashMap;
 
 pub struct TypeChecker {
     variables: HashMap<String, LumoraType>,
@@ -48,18 +48,19 @@ impl TypeChecker {
             let imported_program = parser.parse()?;
             let mut imported_type_checker = TypeChecker::new();
             imported_type_checker.check_program(&imported_program)?;
-            
+
             for declaration in &imported_program.declarations {
                 match declaration {
                     TopLevelDeclaration::Function(function) => {
                         if function.is_exported {
-                            let param_types = function.params.iter().map(|(_, ty)| ty.clone()).collect();
+                            let param_types =
+                                function.params.iter().map(|(_, ty)| ty.clone()).collect();
                             self.functions.insert(
                                 function.name.clone(),
                                 (param_types, function.return_type.clone()),
                             );
                         }
-                    },
+                    }
                     TopLevelDeclaration::ExternalFunction(ext_func) => {
                         let param_types = ext_func.params.clone();
                         self.functions.insert(
@@ -79,7 +80,7 @@ impl TypeChecker {
                         function.name.clone(),
                         (param_types, function.return_type.clone()),
                     );
-                },
+                }
                 TopLevelDeclaration::ExternalFunction(ext_func) => {
                     let param_types = ext_func.params.clone();
                     self.functions.insert(

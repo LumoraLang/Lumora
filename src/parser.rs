@@ -1,6 +1,8 @@
-use crate::lexer::{Token, Spanned};
+use crate::ast::{
+    BinaryOp, Expr, ExternalFunction, Function, LumoraType, Program, Stmt, TopLevelDeclaration,
+};
 use crate::errors::{LumoraError, Span};
-use crate::ast::{LumoraType, Expr, BinaryOp, Stmt, Function, Program, ExternalFunction, TopLevelDeclaration};
+use crate::lexer::{Spanned, Token};
 
 pub struct Parser {
     tokens: Vec<Spanned<Token>>,
@@ -79,7 +81,9 @@ impl Parser {
                     declarations.push(TopLevelDeclaration::Function(self.parse_function()?));
                 }
                 Token::Ext => {
-                    declarations.push(TopLevelDeclaration::ExternalFunction(self.parse_external_function()?));
+                    declarations.push(TopLevelDeclaration::ExternalFunction(
+                        self.parse_external_function()?,
+                    ));
                 }
                 _ => {
                     return Err(LumoraError::ParseError {
@@ -210,7 +214,8 @@ impl Parser {
                 return Err(LumoraError::ParseError {
                     code: "L007".to_string(),
                     span: None,
-                    message: "Unexpected end of input while expecting external function name".to_string(),
+                    message: "Unexpected end of input while expecting external function name"
+                        .to_string(),
                     help: None,
                 });
             }
@@ -338,7 +343,7 @@ impl Parser {
                     self.advance();
                     if matches!(self.peek().map(|s| &s.value), Some(Token::If)) {
                         Some(vec![self.parse_statement()?])
-                    } else { 
+                    } else {
                         self.expect(&Token::LeftBrace)?;
                         let mut else_stmts = Vec::new();
                         while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBrace)) {

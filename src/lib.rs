@@ -1,17 +1,17 @@
-pub mod lexer;
-pub mod errors;
 pub mod ast;
-pub mod parser;
-pub mod type_checker;
 pub mod codegen;
 pub mod config;
-use logos::Logos;
-use inkwell::context::Context;
-use crate::lexer::{Token, Spanned};
+pub mod errors;
+pub mod lexer;
+pub mod parser;
+pub mod type_checker;
+use crate::codegen::CodeGenerator;
 use crate::errors::{LumoraError, Span};
+use crate::lexer::{Spanned, Token};
 use crate::parser::Parser;
 use crate::type_checker::TypeChecker;
-use crate::codegen::CodeGenerator;
+use inkwell::context::Context;
+use logos::Logos;
 pub fn compile_lumora(source: &str) -> Result<String, LumoraError> {
     let mut lexer = Token::lexer(source).spanned();
     let mut tokens = Vec::new();

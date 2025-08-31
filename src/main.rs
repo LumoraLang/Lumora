@@ -1,14 +1,14 @@
+use logos::Logos;
+use lumora::compile_lumora;
+use lumora::config::load_config;
+use lumora::errors::LumoraError;
+use lumora::lexer::{Spanned, Token};
+use lumora::parser::Parser;
+use lumora::type_checker::TypeChecker;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use lumora::compile_lumora;
-use lumora::errors::LumoraError;
-use lumora::lexer::{Token, Spanned};
-use lumora::parser::Parser;
-use lumora::type_checker::TypeChecker;
-use logos::Logos;
-use lumora::config::load_config;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -18,7 +18,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let config = load_config("lumora.yaml").unwrap_or_else(|e| {
-        eprintln!("Warning: Could not load lumora.yaml: {}. Using default configuration.", e);
+        eprintln!(
+            "Warning: Could not load lumora.yaml: {}. Using default configuration.",
+            e
+        );
         Default::default()
     });
 
@@ -42,7 +45,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some((token_result, span)) = lexer.next() {
         let token = token_result.map_err(|_| LumoraError::ParseError {
             code: "L030".to_string(),
-            span: Some(lumora::errors::Span::new(span.clone(), input_file.clone(), &source_code)),
+            span: Some(lumora::errors::Span::new(
+                span.clone(),
+                input_file.clone(),
+                &source_code,
+            )),
             message: "Lexing error: Unrecognized token".to_string(),
             help: None,
         })?;
@@ -81,17 +88,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = fs::remove_file(&imported_ll_file) {
             eprintln!(
                 "Warning: Could not delete temporary .ll file {}: {}",
-                imported_ll_file.display(), e
+                imported_ll_file.display(),
+                e
             );
         }
         imported_bc_files.push(imported_bc_file);
     }
 
     let llvm_ir = compile_lumora(&source_code)?;
-    let ll_file = output_dir.join(format!("{}.ll", output_name.file_name().unwrap().to_str().unwrap()));
+    let ll_file = output_dir.join(format!(
+        "{}.ll",
+        output_name.file_name().unwrap().to_str().unwrap()
+    ));
     fs::write(&ll_file, llvm_ir)?;
 
-    let s_file = output_dir.join(format!("{}.s", output_name.file_name().unwrap().to_str().unwrap()));
+    let s_file = output_dir.join(format!(
+        "{}.s",
+        output_name.file_name().unwrap().to_str().unwrap()
+    ));
     let mut llc_command = Command::new("llc");
     llc_command
         .arg(&ll_file)
@@ -114,7 +128,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = fs::remove_file(&ll_file) {
         eprintln!(
             "Warning: Could not delete temporary .ll file {}: {}",
-            ll_file.display(), e
+            ll_file.display(),
+            e
         );
     }
 
@@ -127,7 +142,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = fs::remove_file(&s_file) {
             eprintln!(
                 "Warning: Could not delete temporary .s file {}: {}",
-                s_file.display(), e
+                s_file.display(),
+                e
             );
         }
         return Err("llc compilation failed".into());
@@ -146,13 +162,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .arg(&obj_file);
 
                 if !config.build_settings.optimization_level.is_empty() {
-                    clang_compile_command.arg(format!("-{}", config.build_settings.optimization_level));
+                    clang_compile_command
+                        .arg(format!("-{}", config.build_settings.optimization_level));
                 }
                 if config.build_settings.debug_info {
                     clang_compile_command.arg("-g");
                 }
                 if !config.build_settings.target_triple.is_empty() {
-                    clang_compile_command.arg(format!("-target={}", config.build_settings.target_triple));
+                    clang_compile_command
+                        .arg(format!("-target={}", config.build_settings.target_triple));
                 }
                 clang_compile_command.arg("-fPIE");
                 let compile_output = clang_compile_command.output()?;
@@ -168,10 +186,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else if ext == "o" || ext == "a" {
                 external_object_files.push(dep.clone());
             } else {
-                eprintln!("Warning: Unsupported external dependency type: {}", dep.display());
+                eprintln!(
+                    "Warning: Unsupported external dependency type: {}",
+                    dep.display()
+                );
             }
         } else {
-            eprintln!("Warning: External dependency has no extension: {}", dep.display());
+            eprintln!(
+                "Warning: External dependency has no extension: {}",
+                dep.display()
+            );
         }
     }
 
@@ -203,7 +227,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = fs::remove_file(&s_file) {
         eprintln!(
             "Warning: Could not delete temporary .s file {}: {}",
-            s_file.display(), e
+            s_file.display(),
+            e
         );
     }
 
@@ -219,12 +244,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Err(e) = fs::remove_file(bc_file) {
             eprintln!(
                 "Warning: Could not delete temporary .bc file {}: {}",
-                bc_file.display(), e
+                bc_file.display(),
+                e
             );
         }
     }
 
-    println!("Compilation successful: {} -> {}", input_file, output_name.display());
+    println!(
+        "Compilation successful: {} -> {}",
+        input_file,
+        output_name.display()
+    );
     Ok(())
 }
 

@@ -1,0 +1,4 @@
+fn main() i32 {
+    let s string = "Hello\nWorld";
+    return 0;
+}

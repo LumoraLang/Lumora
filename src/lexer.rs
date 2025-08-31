@@ -1,4 +1,4 @@
-use logos::Logos;
+use logos::{Lexer, Logos};
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {
@@ -68,12 +68,37 @@ pub enum Token {
     Dot,
     #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_owned())]
     Identifier(String),
-    #[regex(r"-?[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?", |lex| lex.slice().parse().ok())]
+    #[regex(r"-?[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?", |lex| lex.slice().parse().ok())]
     Float(f64),
     #[regex(r"-?[0-9]+", |lex| lex.slice().parse().ok())]
     Integer(i32),
-    #[regex(r#""([^"\\]|\\.)*""#, |lex| { let s = lex.slice(); s[1..s.len()-1].to_owned() })]
+    #[regex(r#""([^"\\]|\\.)*""#, |lex| parse_string_literal(lex))]
     StringLiteral(String),
+}
+
+fn parse_string_literal(lex: &mut Lexer<Token>) -> String {
+    let s = lex.slice();
+    let content = &s[1..s.len() - 1];
+
+    let mut result = String::with_capacity(content.len());
+    let mut chars = content.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            let next = chars.next().unwrap();
+            match next {
+                'n' => result.push('\n'),
+                '\\' => result.push('\\'),
+                'e' => result.push('\x1B'),
+                'b' => result.push('\x08'),
+                'r' => result.push('\r'),
+                other => result.push(other),
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result
 }
 
 pub struct Spanned<T> {
@@ -91,8 +116,7 @@ pub fn get_line_col(source: &str, offset: usize) -> (usize, usize) {
         if c == '\n' {
             line += 1;
             col = 1;
-        }
-        else {
+        } else {
             col += 1;
         }
     }
