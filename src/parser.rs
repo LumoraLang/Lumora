@@ -3,7 +3,6 @@ use crate::ast::{
 };
 use crate::errors::{LumoraError, Span};
 use crate::lexer::{Spanned, Token};
-
 pub struct Parser {
     tokens: Vec<Spanned<Token>>,
     current: usize,
@@ -595,6 +594,42 @@ impl Parser {
                         Ok(Expr::Identifier(name))
                     }
                 }
+                Token::StringOf => {
+                    self.expect(&Token::LeftParen)?;
+                    let expr = self.parse_expression()?;
+                    self.expect(&Token::RightParen)?;
+                    Ok(Expr::StringOf(Box::new(expr)))
+                }
+                Token::I32Of => {
+                    self.expect(&Token::LeftParen)?;
+                    let expr = self.parse_expression()?;
+                    self.expect(&Token::RightParen)?;
+                    Ok(Expr::I32Of(Box::new(expr)))
+                }
+                Token::I64Of => {
+                    self.expect(&Token::LeftParen)?;
+                    let expr = self.parse_expression()?;
+                    self.expect(&Token::RightParen)?;
+                    Ok(Expr::I64Of(Box::new(expr)))
+                }
+                Token::BoolOf => {
+                    self.expect(&Token::LeftParen)?;
+                    let expr = self.parse_expression()?;
+                    self.expect(&Token::RightParen)?;
+                    Ok(Expr::BoolOf(Box::new(expr)))
+                }
+                Token::F32Of => {
+                    self.expect(&Token::LeftParen)?;
+                    let expr = self.parse_expression()?;
+                    self.expect(&Token::RightParen)?;
+                    Ok(Expr::F32Of(Box::new(expr)))
+                }
+                Token::F64Of => {
+                    self.expect(&Token::LeftParen)?;
+                    let expr = self.parse_expression()?;
+                    self.expect(&Token::RightParen)?;
+                    Ok(Expr::F64Of(Box::new(expr)))
+                }
                 Token::LeftParen => {
                     let expr = self.parse_expression()?;
                     self.expect(&Token::RightParen)?;
@@ -656,9 +691,6 @@ impl Parser {
                     Token::Divide => {
                         module_path.push('/');
                     }
-                    Token::Dot => {
-                        module_path.push('/');
-                    }
                     _ => {
                         return Err(LumoraError::ParseError {
                             code: "L031".to_string(),
@@ -667,7 +699,7 @@ impl Parser {
                                 self.file_name.clone(),
                                 &self.source_code,
                             )),
-                            message: "Expected identifier, slash, or dot in use statement"
+                            message: "Expected identifier or slash in use statement"
                                 .to_string(),
                             help: None,
                         });

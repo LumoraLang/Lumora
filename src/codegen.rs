@@ -9,7 +9,7 @@ use inkwell::module::Linkage;
 use inkwell::module::Module;
 use inkwell::types::{AsTypeRef, BasicType, BasicTypeEnum};
 use inkwell::values::AsValueRef;
-use inkwell::values::{BasicValueEnum, FunctionValue, PointerValue};
+use inkwell::values::{BasicValueEnum, FunctionValue, PointerValue, BasicValue};
 use llvm_sys::core::LLVMBuildLoad2;
 use std::collections::HashMap;
 
@@ -50,7 +50,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             let fn_type = {
                 if name == "main" {
                     let i32_type = self.context.i32_type();
-                    let i8_ptr_type = self.context.i8_type().ptr_type(0.into());
+                    let i8_ptr_type = self.context.ptr_type(0.into());
                     i32_type.fn_type(&[i32_type.into(), i8_ptr_type.into()], false)
                 } else {
                     let param_llvm_types: Vec<inkwell::types::BasicMetadataTypeEnum<'ctx>> =
@@ -781,18 +781,204 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                 let arg_ptr = unsafe {
                     self.builder.build_gep(
-                        self.context.i8_type().ptr_type(0.into()),
+                        self.context.ptr_type(0.into()),
                         argv,
                         &[index_val],
                         "arg_ptr",
                     )?
                 };
                 let loaded_arg = self.builder.build_load(
-                    self.context.i8_type().ptr_type(0.into()),
+                    self.context.ptr_type(0.into()),
                     arg_ptr,
                     "loaded_arg",
                 )?;
                 Ok(loaded_arg.into())
+            }
+            Expr::StringOf(expr) => {
+                let val = self.generate_expression(expr)?;
+                let expr_type = self.type_of_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 => {
+                        let i32_val = val.into_int_value();
+                        let format_str = self.builder.build_global_string_ptr("%d\0", "fmt_i32_str")?;
+                        let sprintf_fn = self.module.get_function("sprintf").unwrap_or_else(|| {
+                            let fn_type = self.context.i32_type().fn_type(&[
+                                self.context.ptr_type(0.into()).into(),
+                                self.context.ptr_type(0.into()).into(),
+                            ], true);
+                            self.module.add_function("sprintf", fn_type, None)
+                        });
+                        let buffer = self.builder.build_array_alloca(self.context.i8_type(), self.context.i32_type().const_int(20, false), "str_buffer")?;
+                        let _ = self.builder.build_call(sprintf_fn, &[buffer.into(), format_str.as_pointer_value().into(), i32_val.into()], "sprintf_call");
+                        Ok(buffer.into())
+                    }
+                    LumoraType::I64 => {
+                        let i64_val = val.into_int_value();
+                        let format_str = self.builder.build_global_string_ptr("%lld\0", "fmt_i64_str")?;
+                        let sprintf_fn = self.module.get_function("sprintf").unwrap_or_else(|| {
+                            let fn_type = self.context.i32_type().fn_type(&[
+                                self.context.ptr_type(0.into()).into(),
+                                self.context.ptr_type(0.into()).into(),
+                            ], true);
+                            self.module.add_function("sprintf", fn_type, None)
+                        });
+                        let buffer = self.builder.build_array_alloca(self.context.i8_type(), self.context.i32_type().const_int(20, false), "str_buffer")?;
+                        let _ = self.builder.build_call(sprintf_fn, &[buffer.into(), format_str.as_pointer_value().into(), i64_val.into()], "sprintf_call");
+                        Ok(buffer.into())
+                    }
+                    LumoraType::F64 => {
+                        let f64_val = val.into_float_value();
+                        let format_str = self.builder.build_global_string_ptr("%f\0", "fmt_f64_str")?;
+                        let sprintf_fn = self.module.get_function("sprintf").unwrap_or_else(|| {
+                            let fn_type = self.context.i32_type().fn_type(&[
+                                self.context.ptr_type(0.into()).into(),
+                                self.context.ptr_type(0.into()).into(),
+                            ], true);
+                            self.module.add_function("sprintf", fn_type, None)
+                        });
+                        let buffer = self.builder.build_array_alloca(self.context.i8_type(), self.context.i32_type().const_int(30, false), "str_buffer")?;
+                        let _ = self.builder.build_call(sprintf_fn, &[buffer.into(), format_str.as_pointer_value().into(), f64_val.into()], "sprintf_call");
+                        Ok(buffer.into())
+                    }
+                    LumoraType::Bool => {
+                        let bool_val = val.into_int_value();
+                        let true_str = self.builder.build_global_string_ptr("true\0", "true_str")?;
+                        let false_str = self.builder.build_global_string_ptr("false\0", "false_str")?;
+                        let result_ptr = self.builder.build_select(bool_val, true_str.as_basic_value_enum(), false_str.as_basic_value_enum(), "bool_to_str")?;
+                        Ok(result_ptr.into())
+                    }
+                    LumoraType::String => Ok(val),
+                    _ => Err(LumoraError::CodegenError {
+                        code: "L051".to_string(),
+                        span: None,
+                        message: format!("Unsupported type for string conversion: {:?}", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::I32Of(expr) => {
+                let val = self.generate_expression(expr)?;
+                let expr_type = self.type_of_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 => Ok(val),
+                    LumoraType::I64 => Ok(self.builder.build_int_truncate(val.into_int_value(), self.context.i32_type(), "trunc_i64_to_i32")?.into()),
+                    LumoraType::F64 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i32_type(), "f64_to_i32")?.into()),
+                    LumoraType::Bool => Ok(self.builder.build_int_z_extend(val.into_int_value(), self.context.i32_type(), "bool_to_i32")?.into()),
+                    LumoraType::String => {
+                        let str_val = val.into_pointer_value();
+                        let atoi_fn = self.module.get_function("atoi").unwrap_or_else(|| {
+                            let fn_type = self.context.i32_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            self.module.add_function("atoi", fn_type, None)
+                        });
+                        let call_result = self.builder.build_call(atoi_fn, &[str_val.into()], "atoi_call");
+                        Ok(call_result?.try_as_basic_value().left().unwrap())
+                    }
+                    _ => Err(LumoraError::CodegenError {
+                        code: "L052".to_string(),
+                        span: None,
+                        message: format!("Unsupported type for i32 conversion: {:?}", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::I64Of(expr) => {
+                let val = self.generate_expression(expr)?;
+                let expr_type = self.type_of_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 => Ok(self.builder.build_int_s_extend(val.into_int_value(), self.context.i64_type(), "sext_i32_to_i64")?.into()),
+                    LumoraType::I64 => Ok(val),
+                    LumoraType::F64 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i64_type(), "f64_to_i64")?.into()),
+                    LumoraType::Bool => Ok(self.builder.build_int_z_extend(val.into_int_value(), self.context.i64_type(), "bool_to_i64")?.into()),
+                    LumoraType::String => {
+                        let str_val = val.into_pointer_value();
+                        let atoll_fn = self.module.get_function("atoll").unwrap_or_else(|| {
+                            let fn_type = self.context.i64_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            self.module.add_function("atoll", fn_type, None)
+                        });
+                        let call_result = self.builder.build_call(atoll_fn, &[str_val.into()], "atoll_call");
+                        Ok(call_result?.try_as_basic_value().left().unwrap())
+                    }
+                    _ => Err(LumoraError::CodegenError {
+                        code: "L053".to_string(),
+                        span: None,
+                        message: format!("Unsupported type for i64 conversion: {:?}", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::BoolOf(expr) => {
+                let val = self.generate_expression(expr)?;
+                let expr_type = self.type_of_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 | LumoraType::I64 => Ok(self.builder.build_int_compare(IntPredicate::NE, val.into_int_value(), val.into_int_value().get_type().const_int(0, false), "int_to_bool")?.into()),
+                    LumoraType::F64 => Ok(self.builder.build_float_compare(inkwell::FloatPredicate::ONE, val.into_float_value(), val.into_float_value().get_type().const_float(0.0), "float_to_bool")?.into()),
+                    LumoraType::Bool => Ok(val),
+                    LumoraType::String => {
+                        let str_val = val.into_pointer_value();
+                        let strlen_fn = self.module.get_function("strlen").unwrap_or_else(|| {
+                            let fn_type = self.context.i64_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            self.module.add_function("strlen", fn_type, None)
+                        });
+                        let call_result = self.builder.build_call(strlen_fn, &[str_val.into()], "strlen_call");
+                        Ok(self.builder.build_int_compare(IntPredicate::NE, call_result?.try_as_basic_value().left().unwrap().into_int_value(), self.context.i64_type().const_int(0, false), "str_to_bool")?.into())
+                    }
+                    _ => Err(LumoraError::CodegenError {
+                        code: "L054".to_string(),
+                        span: None,
+                        message: format!("Unsupported type for bool conversion: {:?}", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::F32Of(expr) => {
+                let val = self.generate_expression(expr)?;
+                let expr_type = self.type_of_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f32_type(), "i32_to_f32")?.into()),
+                    LumoraType::I64 => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f32_type(), "i64_to_f32")?.into()),
+                    LumoraType::F64 => Ok(self.builder.build_float_trunc(val.into_float_value(), self.context.f32_type(), "f64_to_f32")?.into()),
+                    LumoraType::Bool => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f32_type(), "bool_to_f32")?.into()),
+                    LumoraType::String => {
+                        let str_val = val.into_pointer_value();
+                        let atof_fn = self.module.get_function("atof").unwrap_or_else(|| {
+                            let fn_type = self.context.f64_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            self.module.add_function("atof", fn_type, None)
+                        });
+                        let call_result = self.builder.build_call(atof_fn, &[str_val.into()], "atof_call");
+                        Ok(self.builder.build_float_trunc(call_result?.try_as_basic_value().left().unwrap().into_float_value(), self.context.f32_type(), "f64_to_f32_from_atof")?.into())
+                    }
+                    _ => Err(LumoraError::CodegenError {
+                        code: "L055".to_string(),
+                        span: None,
+                        message: format!("Unsupported type for f32 conversion: {:?}", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::F64Of(expr) => {
+                let val = self.generate_expression(expr)?;
+                let expr_type = self.type_of_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f64_type(), "i32_to_f64")?.into()),
+                    LumoraType::I64 => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f64_type(), "i64_to_f64")?.into()),
+                    LumoraType::F64 => Ok(val),
+                    LumoraType::Bool => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f64_type(), "bool_to_f64")?.into()),
+                    LumoraType::String => {
+                        let str_val = val.into_pointer_value();
+                        let atof_fn = self.module.get_function("atof").unwrap_or_else(|| {
+                            let fn_type = self.context.f64_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            self.module.add_function("atof", fn_type, None)
+                        });
+                        let call_result = self.builder.build_call(atof_fn, &[str_val.into()], "atof_call");
+                        Ok(call_result?.try_as_basic_value().left().unwrap())
+                    }
+                    _ => Err(LumoraError::CodegenError {
+                        code: "L056".to_string(),
+                        span: None,
+                        message: format!("Unsupported type for f64 conversion: {:?}", expr_type),
+                        help: None,
+                    }),
+                }
             }
         }
     }
@@ -904,6 +1090,12 @@ impl<'ctx> CodeGenerator<'ctx> {
             }
             Expr::ArgCount => Ok(LumoraType::I32),
             Expr::GetArg(_) => Ok(LumoraType::String),
+            Expr::StringOf(_) => Ok(LumoraType::String),
+            Expr::I32Of(_) => Ok(LumoraType::I32),
+            Expr::I64Of(_) => Ok(LumoraType::I64),
+            Expr::BoolOf(_) => Ok(LumoraType::Bool),
+            Expr::F32Of(_) => Ok(LumoraType::F64),
+            Expr::F64Of(_) => Ok(LumoraType::F64),
         }
     }
 }

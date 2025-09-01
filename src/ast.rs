@@ -43,6 +43,12 @@ pub enum Expr {
     Null,
     ArgCount,
     GetArg(Box<Expr>),
+    StringOf(Box<Expr>),
+    I32Of(Box<Expr>),
+    I64Of(Box<Expr>),
+    BoolOf(Box<Expr>),
+    F32Of(Box<Expr>),
+    F64Of(Box<Expr>),
 }
 
 #[derive(Debug, Clone)]

@@ -1,0 +1,76 @@
+ext fn puts(string): i32;
+
+fn main(): i32 {
+    let i32_val: i32 = 123;
+    let i64_val: i64 = 456789012345;
+    let f64_val: f64 = 3.14159;
+    let bool_val: bool = true;
+    let string_val: string = "hello";
+
+    // Test stringof
+    let s_i32: string = stringof(i32_val);
+    let s_i64: string = stringof(i64_val);
+    let s_f64: string = stringof(f64_val);
+    let s_bool: string = stringof(bool_val);
+    let s_string: string = stringof(string_val);
+
+    puts("stringof(i32_val): "); puts(s_i32); puts("\n");
+    puts("stringof(i64_val): "); puts(s_i64); puts("\n");
+    puts("stringof(f64_val): "); puts(s_f64); puts("\n");
+    puts("stringof(bool_val): "); puts(s_bool); puts("\n");
+    puts("stringof(string_val): "); puts(s_string); puts("\n");
+
+    // Test i32of
+    let i32_from_s: i32 = i32of(s_i32);
+    let i32_from_i64: i32 = i32of(i64_val);
+    let i32_from_f64: i32 = i32of(f64_val);
+    let i32_from_bool: i32 = i32of(bool_val);
+    let i32_from_string: i32 = i32of("789");
+
+    puts("i32of(s_i32): "); puts(stringof(i32_from_s)); puts("\n");
+    puts("i32of(i64_val): "); puts(stringof(i32_from_i64)); puts("\n");
+    puts("i32of(f64_val): "); puts(stringof(i32_from_f64)); puts("\n");
+    puts("i32of(bool_val): "); puts(stringof(i32_from_bool)); puts("\n");
+    puts("i32of(\"789\"): "); puts(stringof(i32_from_string)); puts("\n");
+
+    // Test i64of
+    let i64_from_s: i64 = i64of(s_i64);
+    let i64_from_i32: i64 = i64of(i32_val);
+    let i64_from_f64: i64 = i64of(f64_val);
+    let i64_from_bool: i64 = i64of(bool_val);
+    let i64_from_string: i64 = i64of("9876543210");
+
+    puts("i64of(s_i64): "); puts(stringof(i64_from_s)); puts("\n");
+    puts("i64of(i32_val): "); puts(stringof(i64_from_i32)); puts("\n");
+    puts("i64of(f64_val): "); puts(stringof(i64_from_f64)); puts("\n");
+    puts("i64of(bool_val): "); puts(stringof(i64_from_bool)); puts("\n");
+    puts("i64of(\"9876543210\"): "); puts(stringof(i64_from_string)); puts("\n");
+
+    // Test boolof
+    let bool_from_i32: bool = boolof(i32_val);
+    let bool_from_i64: bool = boolof(i64_val);
+    let bool_from_f64: bool = boolof(f64_val);
+    let bool_from_s: bool = boolof(s_bool);
+    let bool_from_string: bool = boolof("false");
+
+    puts("boolof(i32_val): "); puts(stringof(bool_from_i32)); puts("\n");
+    puts("boolof(i64_val): "); puts(stringof(bool_from_i64)); puts("\n");
+    puts("boolof(f64_val): "); puts(stringof(bool_from_f64)); puts("\n");
+    puts("boolof(s_bool): "); puts(stringof(bool_from_s)); puts("\n");
+    puts("boolof(\"false\"): "); puts(stringof(bool_from_string)); puts("\n");
+
+    // Test f64of (f32of is not implemented as a distinct type, it converts to f64)
+    let f64_from_i32: f64 = f64of(i32_val);
+    let f64_from_i64: f64 = f64of(i64_val);
+    let f64_from_s: f64 = f64of(s_f64);
+    let f64_from_bool: f64 = f64of(bool_val);
+    let f64_from_string: f64 = f64of("1.234");
+
+    puts("f64of(i32_val): "); puts(stringof(f64_from_i32)); puts("\n");
+    puts("f64of(i64_val): "); puts(stringof(f64_from_i64)); puts("\n");
+    puts("f64of(s_f64): "); puts(stringof(f64_from_s)); puts("\n");
+    puts("f64of(bool_val): "); puts(stringof(f64_from_bool)); puts("\n");
+    puts("f64of(\"1.234\"): "); puts(stringof(f64_from_string)); puts("\n");
+
+    return 0;
+}

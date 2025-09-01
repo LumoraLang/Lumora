@@ -1,6 +1,6 @@
-- [x] ~add argc and argv~  (arg_count(): i32 and get_arg(i32/i64): string)
+- [x] ~add argc and argv~  (`arg_count(): i32` and `get_arg(i32/i64): string`)
 - [ ] write and stdlib
 - [ ] write more libs
 - [ ] dependency manager (even if git)
 - [ ] f32 support (probably)
-- [ ] type conversions like stringof(), i32of(), i64of(), boolof(), f32of(), f64of()
+- [x] ~type conversions like stringof(), i32of(), i64of(), boolof(), f32of(), f64of()~

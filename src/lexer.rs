@@ -5,7 +5,6 @@ pub enum Token {
     #[regex(r"[ \t\n\f]+", logos::skip)]
     #[regex(r"//[^\n]*", logos::skip)]
     #[regex(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", logos::skip)]
-    Error,
     #[token("fn")]
     Fn,
     #[token("let")]
@@ -22,6 +21,18 @@ pub enum Token {
     Exp,
     #[token("ext")]
     Ext,
+    #[token("stringof")]
+    StringOf,
+    #[token("i32of")]
+    I32Of,
+    #[token("i64of")]
+    I64Of,
+    #[token("boolof")]
+    BoolOf,
+    #[token("f32of")]
+    F32Of,
+    #[token("f64of")]
+    F64Of,
     #[token("while")]
     While,
     #[token("for")]
@@ -80,47 +91,55 @@ pub enum Token {
     Divide,
     #[token(":")]
     Colon,
-    #[token(".")]
-    Dot,
-    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_owned())]
-    Identifier(String),
-    #[regex(r"-?[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?", |lex| lex.slice().parse().ok())]
+    #[regex(r"-?[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?", |lex| lex.slice().parse().ok())]
     Float(f64),
     #[regex(r"0x[0-9a-fA-F]+|-?[0-9]+", |lex| {
-        let slice = lex.slice();
-        if slice.starts_with("0x") {
-            i64::from_str_radix(slice.trim_start_matches("0x"), 16).ok()
-        } else {
-            slice.parse::<i64>().ok()
-        }
+    let slice = lex.slice();
+    if slice.starts_with("0x") {
+        i64::from_str_radix(slice.trim_start_matches("0x"), 16).ok()
+    } else {
+        slice.parse::<i64>().ok()
+    }
     })]
     Integer(i64),
+    #[regex(r"[a-zA-Z_][a-zA-Z0-9_]*", |lex| lex.slice().to_owned())]
+    Identifier(String),
     #[regex(r#""([^"\\]|\\.)*"|'([^'\\]|\\.)*'"#, |lex| parse_string_literal(lex))]
     StringLiteral(String),
+    Error,
 }
 
 fn parse_string_literal(lex: &mut Lexer<Token>) -> String {
     let s = lex.slice();
-    let content = &s[1..s.len() - 1];
+    if s.len() < 2 {
+        return String::new();
+    }
+    let first = s.chars().next().unwrap();
+    let last = s.chars().last().unwrap();
+    if (first == '"' && last != '"') || (first == '\'' && last != '\'') {
+        return String::new();
+    }
 
+    let content = &s[1..s.len() - 1];
     let mut result = String::with_capacity(content.len());
     let mut chars = content.chars().peekable();
-
     while let Some(c) = chars.next() {
         if c == '\\' {
-            let next = chars.next().unwrap();
-            match next {
-                'n' => result.push('\n'),
-                '\\' => result.push('\\'),
-                'e' => result.push('\x1B'),
-                'b' => result.push('\x08'),
-                'r' => result.push('\r'),
-                other => result.push(other),
+            if let Some(next) = chars.next() {
+                match next {
+                    'n' => result.push('\n'),
+                    '\\' => result.push('\\'),
+                    'e' => result.push('\x1B'),
+                    'b' => result.push('\x08'),
+                    'r' => result.push('\r'),
+                    other => result.push(other),
+                }
             }
         } else {
             result.push(c);
         }
     }
+
     result
 }
 

@@ -449,6 +449,78 @@ impl TypeChecker {
                     }
                 }
             }
+            Expr::StringOf(expr) => {
+                let expr_type = self.check_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::String),
+                    _ => return Err(LumoraError::TypeError {
+                        code: "L045".to_string(),
+                        span: None,
+                        message: format!("Cannot convert type {:?} to string", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::I32Of(expr) => {
+                let expr_type = self.check_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::I32),
+                    _ => return Err(LumoraError::TypeError {
+                        code: "L046".to_string(),
+                        span: None,
+                        message: format!("Cannot convert type {:?} to i32", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::I64Of(expr) => {
+                let expr_type = self.check_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::I64),
+                    _ => return Err(LumoraError::TypeError {
+                        code: "L047".to_string(),
+                        span: None,
+                        message: format!("Cannot convert type {:?} to i64", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::BoolOf(expr) => {
+                let expr_type = self.check_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::Bool),
+                    _ => return Err(LumoraError::TypeError {
+                        code: "L048".to_string(),
+                        span: None,
+                        message: format!("Cannot convert type {:?} to bool", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::F32Of(expr) => {
+                let expr_type = self.check_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::F64),
+                    _ => return Err(LumoraError::TypeError {
+                        code: "L049".to_string(),
+                        span: None,
+                        message: format!("Cannot convert type {:?} to f32", expr_type),
+                        help: None,
+                    }),
+                }
+            }
+            Expr::F64Of(expr) => {
+                let expr_type = self.check_expression(expr)?;
+                match expr_type {
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::F64),
+                    _ => return Err(LumoraError::TypeError {
+                        code: "L050".to_string(),
+                        span: None,
+                        message: format!("Cannot convert type {:?} to f64", expr_type),
+                        help: None,
+                    }),
+                }
+            }
         }
     }
 }
