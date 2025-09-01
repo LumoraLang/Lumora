@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub enum LumoraType {
     I32,
     I64,
+    F32,
     F64,
     Bool,
     Void,
@@ -22,7 +23,7 @@ pub struct ExternalFunction {
 #[derive(Debug, Clone)]
 pub enum Expr {
     Integer(i64),
-    Float(f64),
+    Float(f32),
     Boolean(bool),
     StringLiteral(String),
     Identifier(String),

@@ -2,5 +2,5 @@
 - [ ] write and stdlib
 - [ ] write more libs
 - [ ] dependency manager (even if git)
-- [ ] f32 support (probably)
+- [x] ~f32 support (probably)~
 - [x] ~type conversions like stringof(), i32of(), i64of(), boolof(), f32of(), f64of()~

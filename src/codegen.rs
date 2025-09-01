@@ -320,7 +320,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     fn generate_expression(&mut self, expr: &Expr) -> Result<BasicValueEnum<'ctx>, LumoraError> {
         match expr {
             Expr::Integer(n) => Ok(self.context.i64_type().const_int(*n as u64, true).into()),
-            Expr::Float(f) => Ok(self.context.f64_type().const_float(*f).into()),
+            Expr::Float(f) => Ok(self.context.f32_type().const_float(*f as f64).into()),
             Expr::Boolean(b) => Ok(self.context.bool_type().const_int(*b as u64, false).into()),
             Expr::Null => Ok(self.context.ptr_type(0.into()).const_null().into()),
             Expr::StringLiteral(s) => {
@@ -361,6 +361,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                     }
                     LumoraType::F64 => {
                         Ok(unsafe { inkwell::values::FloatValue::new(loaded_value_ref).into() })
+                    }
+                    LumoraType::F32 => {
+                        Ok(unsafe { inkwell::values::BasicValueEnum::new(loaded_value_ref) })
                     }
                     LumoraType::Bool => {
                         Ok(unsafe { inkwell::values::IntValue::new(loaded_value_ref).into() })
@@ -840,6 +843,21 @@ impl<'ctx> CodeGenerator<'ctx> {
                         let _ = self.builder.build_call(sprintf_fn, &[buffer.into(), format_str.as_pointer_value().into(), f64_val.into()], "sprintf_call");
                         Ok(buffer.into())
                     }
+                    LumoraType::F32 => {
+                        let f32_val = val.into_float_value();
+                        let f64_val = self.builder.build_float_ext(f32_val, self.context.f64_type(), "f32_to_f64")?;
+                        let format_str = self.builder.build_global_string_ptr("%f\0", "fmt_f32_str")?;
+                        let sprintf_fn = self.module.get_function("sprintf").unwrap_or_else(|| {
+                            let fn_type = self.context.i32_type().fn_type(&[
+                                self.context.ptr_type(0.into()).into(),
+                                self.context.ptr_type(0.into()).into(),
+                            ], true);
+                            self.module.add_function("sprintf", fn_type, None)
+                        });
+                        let buffer = self.builder.build_array_alloca(self.context.i8_type(), self.context.i32_type().const_int(30, false), "str_buffer")?;
+                        let _ = self.builder.build_call(sprintf_fn, &[buffer.into(), format_str.as_pointer_value().into(), f64_val.into()], "sprintf_call");
+                        Ok(buffer.into())
+                    }
                     LumoraType::Bool => {
                         let bool_val = val.into_int_value();
                         let true_str = self.builder.build_global_string_ptr("true\0", "true_str")?;
@@ -863,6 +881,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     LumoraType::I32 => Ok(val),
                     LumoraType::I64 => Ok(self.builder.build_int_truncate(val.into_int_value(), self.context.i32_type(), "trunc_i64_to_i32")?.into()),
                     LumoraType::F64 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i32_type(), "f64_to_i32")?.into()),
+                    LumoraType::F32 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i32_type(), "f32_to_i32")?.into()),
                     LumoraType::Bool => Ok(self.builder.build_int_z_extend(val.into_int_value(), self.context.i32_type(), "bool_to_i32")?.into()),
                     LumoraType::String => {
                         let str_val = val.into_pointer_value();
@@ -888,6 +907,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     LumoraType::I32 => Ok(self.builder.build_int_s_extend(val.into_int_value(), self.context.i64_type(), "sext_i32_to_i64")?.into()),
                     LumoraType::I64 => Ok(val),
                     LumoraType::F64 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i64_type(), "f64_to_i64")?.into()),
+                    LumoraType::F32 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i64_type(), "f32_to_i64")?.into()),
                     LumoraType::Bool => Ok(self.builder.build_int_z_extend(val.into_int_value(), self.context.i64_type(), "bool_to_i64")?.into()),
                     LumoraType::String => {
                         let str_val = val.into_pointer_value();
@@ -912,6 +932,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                 match expr_type {
                     LumoraType::I32 | LumoraType::I64 => Ok(self.builder.build_int_compare(IntPredicate::NE, val.into_int_value(), val.into_int_value().get_type().const_int(0, false), "int_to_bool")?.into()),
                     LumoraType::F64 => Ok(self.builder.build_float_compare(inkwell::FloatPredicate::ONE, val.into_float_value(), val.into_float_value().get_type().const_float(0.0), "float_to_bool")?.into()),
+                    LumoraType::F32 => Ok(self.builder.build_float_compare(inkwell::FloatPredicate::ONE, val.into_float_value(), val.into_float_value().get_type().const_float(0.0), "f32_to_bool")?.into()),
                     LumoraType::Bool => Ok(val),
                     LumoraType::String => {
                         let str_val = val.into_pointer_value();
@@ -988,6 +1009,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             LumoraType::I32 => self.context.i32_type().into(),
             LumoraType::I64 => self.context.i64_type().into(),
             LumoraType::F64 => self.context.f64_type().into(),
+            LumoraType::F32 => self.context.f32_type().into(),
             LumoraType::Bool => self.context.bool_type().into(),
             LumoraType::String => self.context.ptr_type(0.into()).into(),
             LumoraType::Void => {
@@ -1004,7 +1026,7 @@ impl<'ctx> CodeGenerator<'ctx> {
     fn type_of_expression(&self, expr: &Expr) -> Result<LumoraType, LumoraError> {
         match expr {
             Expr::Integer(_) => Ok(LumoraType::I64),
-            Expr::Float(_) => Ok(LumoraType::F64),
+            Expr::Float(_) => Ok(LumoraType::F32),
             Expr::Boolean(_) => Ok(LumoraType::Bool),
             Expr::StringLiteral(_) => Ok(LumoraType::String),
             Expr::Null => Ok(LumoraType::Null),

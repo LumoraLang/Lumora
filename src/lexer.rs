@@ -43,6 +43,8 @@ pub enum Token {
     I32Type,
     #[token("i64")]
     I64Type,
+    #[token("f32")]
+    F32Type,
     #[token("f64")]
     F64Type,
     #[token("bool")]
@@ -92,7 +94,7 @@ pub enum Token {
     #[token(":")]
     Colon,
     #[regex(r"-?[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?", |lex| lex.slice().parse().ok())]
-    Float(f64),
+    Float(f32),
     #[regex(r"0x[0-9a-fA-F]+|-?[0-9]+", |lex| {
     let slice = lex.slice();
     if slice.starts_with("0x") {

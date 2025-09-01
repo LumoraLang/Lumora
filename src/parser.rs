@@ -247,6 +247,7 @@ impl Parser {
             Some(spanned_token) => match &spanned_token.value {
                 Token::I32Type => Ok(LumoraType::I32),
                 Token::I64Type => Ok(LumoraType::I64),
+                Token::F32Type => Ok(LumoraType::F32),
                 Token::F64Type => Ok(LumoraType::F64),
                 Token::BoolType => Ok(LumoraType::Bool),
                 Token::StringType => Ok(LumoraType::String),

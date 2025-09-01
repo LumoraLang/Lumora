@@ -161,7 +161,7 @@ impl TypeChecker {
                                 help: None,
                             });
                         }
-                    } else {
+                    } else if *ty == LumoraType::F64 && value_type == LumoraType::F32 {} else {
                         return Err(LumoraError::TypeError {
                             code: "L019".to_string(),
                             span: None,
@@ -255,7 +255,7 @@ impl TypeChecker {
     fn check_expression(&self, expr: &Expr) -> Result<LumoraType, LumoraError> {
         match expr {
             Expr::Integer(_) => Ok(LumoraType::I64),
-            Expr::Float(_) => Ok(LumoraType::F64),
+            Expr::Float(_) => Ok(LumoraType::F32),
             Expr::Boolean(_) => Ok(LumoraType::Bool),
             Expr::StringLiteral(_) => Ok(LumoraType::String),
             Expr::Null => Ok(LumoraType::Null),
@@ -452,7 +452,7 @@ impl TypeChecker {
             Expr::StringOf(expr) => {
                 let expr_type = self.check_expression(expr)?;
                 match expr_type {
-                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::String),
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F32 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::String),
                     _ => return Err(LumoraError::TypeError {
                         code: "L045".to_string(),
                         span: None,
@@ -464,7 +464,7 @@ impl TypeChecker {
             Expr::I32Of(expr) => {
                 let expr_type = self.check_expression(expr)?;
                 match expr_type {
-                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::I32),
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F32 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::I32),
                     _ => return Err(LumoraError::TypeError {
                         code: "L046".to_string(),
                         span: None,
@@ -476,7 +476,7 @@ impl TypeChecker {
             Expr::I64Of(expr) => {
                 let expr_type = self.check_expression(expr)?;
                 match expr_type {
-                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::I64),
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F32 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::I64),
                     _ => return Err(LumoraError::TypeError {
                         code: "L047".to_string(),
                         span: None,
@@ -488,7 +488,7 @@ impl TypeChecker {
             Expr::BoolOf(expr) => {
                 let expr_type = self.check_expression(expr)?;
                 match expr_type {
-                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::Bool),
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F32 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::Bool),
                     _ => return Err(LumoraError::TypeError {
                         code: "L048".to_string(),
                         span: None,
@@ -500,7 +500,7 @@ impl TypeChecker {
             Expr::F32Of(expr) => {
                 let expr_type = self.check_expression(expr)?;
                 match expr_type {
-                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::F64),
+                    LumoraType::I32 | LumoraType::I64 | LumoraType::F64 | LumoraType::Bool | LumoraType::String => Ok(LumoraType::F32),
                     _ => return Err(LumoraError::TypeError {
                         code: "L049".to_string(),
                         span: None,
