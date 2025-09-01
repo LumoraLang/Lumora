@@ -572,7 +572,7 @@ mod tests {
             }
         "###;
 
-        let result = compile_lumora(source);
+        let result = compile_lumora(source, &["".to_string()]);
         assert!(result.is_ok());
     }
 
@@ -584,7 +584,7 @@ mod tests {
             }
         "###;
 
-        let result = compile_lumora(source);
+        let result = compile_lumora(source, &["".to_string()]);
         assert!(result.is_ok());
     }
 }
