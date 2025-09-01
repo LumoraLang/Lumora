@@ -110,7 +110,18 @@ pub struct LumoraConfig {
     pub linker_settings: LinkerSettings,
     #[serde(default)]
     pub test_settings: TestSettings,
+    #[serde(default)]
+    pub dependencies: Vec<Dependency>,
 }
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Dependency {
+    pub name: String,
+    pub source: String,
+    pub path: PathBuf,
+    pub version: String,
+}
+
 
 impl Default for LumoraConfig {
     fn default() -> Self {
@@ -124,6 +135,7 @@ impl Default for LumoraConfig {
             external_dependencies: Vec::new(),
             linker_settings: LinkerSettings::default(),
             test_settings: TestSettings::default(),
+            dependencies: Vec::new(),
         }
     }
 }

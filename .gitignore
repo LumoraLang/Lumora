@@ -1,3 +1,6 @@
 /target
 /test/build
 /build
+/.lumora
+/test/.lumora
+lumora.yaml

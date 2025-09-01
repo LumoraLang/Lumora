@@ -7,6 +7,7 @@ use lumora::errors::LumoraError;
 use lumora::lexer::{Spanned, Token};
 use lumora::parser::Parser as LumoraParser;
 use lumora::type_checker::TypeChecker;
+use lumora::pm::{handle_pm_command, PmCommands};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -50,7 +51,7 @@ fn main() {
 #[command(author, version, about, long_about = None)]
 struct Cli {
     /// Path to the input .lum file
-    input_file: PathBuf,
+    input_file: Option<PathBuf>,
 
     /// Name of the output executable or library
     #[arg(short, long)]
@@ -75,10 +76,18 @@ struct Cli {
     /// Type of output to generate (executable, shared, static)
     #[arg(long, value_enum, default_value_t = OutputType::Executable)]
     output_type: OutputType,
+
+    #[command(subcommand)]
+    command: Option<PmCommands>,
 }
 
 fn run() -> Result<(), LumoraError> {
     let cli = Cli::parse();
+
+    if let Some(command) = cli.command {
+        return handle_pm_command(command);
+    }
+
     let config = if let Some(config_path) = cli.config {
         load_config(&config_path.to_string_lossy()).map_err(|e| {
             LumoraError::ConfigurationError {
@@ -112,11 +121,15 @@ fn run() -> Result<(), LumoraError> {
         ),
     })?;
 
-    let input_file = &cli.input_file;
+    let input_file = cli.input_file.ok_or_else(|| LumoraError::ConfigurationError {
+        message: "No input file provided for compilation.".to_string(),
+        help: Some("Please provide an input .lum file or use a 'pm' subcommand.".to_string()),
+    })?;
+
     let output_name = if let Some(output_path) = cli.output {
         output_path
     } else {
-        Path::new(input_file)
+        Path::new(&input_file)
             .file_stem()
             .and_then(|s| s.to_str())
             .map(|s| output_dir.join(s))
@@ -124,7 +137,7 @@ fn run() -> Result<(), LumoraError> {
     };
 
     let source_code =
-        fs::read_to_string(input_file).map_err(|e| LumoraError::ConfigurationError {
+        fs::read_to_string(&input_file).map_err(|e| LumoraError::ConfigurationError {
             message: format!("Could not read input file {}: {}", input_file.display(), e),
             help: Some("Ensure the input file exists and you have read permissions.".to_string()),
         })?;
@@ -155,7 +168,7 @@ fn run() -> Result<(), LumoraError> {
 
     let mut imported_bc_files = Vec::new();
     for module_name in &program.uses {
-        let imported_lum_file = resolve_module_path(module_name, Path::new(input_file))?;
+        let imported_lum_file = resolve_module_path(module_name, &input_file)?;
         let imported_output_name = format!("imported_{}", module_name);
         let imported_source_code = fs::read_to_string(&imported_lum_file).map_err(|e| {
             LumoraError::ConfigurationError {

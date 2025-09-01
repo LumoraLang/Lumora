@@ -1,18 +1,27 @@
-project_name: "Test"
-version: "0.1.0"
+project_name: Test
+version: 0.1.0
 authors:
-  - "NEOAPPS <asd22.info@gmail.com>"
-description: "A test project for Lumora."
+- NEOAPPS <asd22.info@gmail.com>
+description: A test project for Lumora.
 build_settings:
-  output_dir: "build"
-  optimization_level: "O2"
+  output_dir: build
+  optimization_level: O2
   debug_info: false
+  target_triple: ''
   output_type: Executable
-
-external_dependencies: []  # can be .c, .o, etc
+source_files: []
+external_dependencies: []
 linker_settings:
   libraries:
-    - "m"
-    - "raylib"
+  - m
+  - raylib
   flags:
-    - "-L/usr/local/lib"
+  - -L/usr/local/lib
+test_settings:
+  run_tests_on_build: true
+  test_dir: tests
+dependencies:
+- name: Spoon-Knife
+  source: octocat/Spoon-Knife
+  path: .lumora/Spoon-Knife
+  version: d0dd1f61b33d64e29d8bc1372a94ef6a2fee76a9
