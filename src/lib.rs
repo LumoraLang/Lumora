@@ -12,7 +12,7 @@ use crate::parser::Parser;
 use crate::type_checker::TypeChecker;
 use inkwell::context::Context;
 use logos::Logos;
-pub fn compile_lumora(source: &str) -> Result<String, LumoraError> {
+pub fn compile_lumora(source: &str, args: &[String]) -> Result<String, LumoraError> {
     let mut lexer = Token::lexer(source).spanned();
     let mut tokens = Vec::new();
     while let Some((token_result, span)) = lexer.next() {
@@ -30,7 +30,7 @@ pub fn compile_lumora(source: &str) -> Result<String, LumoraError> {
     let mut type_checker = TypeChecker::new();
     type_checker.check_program(&program)?;
     let context = Context::create();
-    let mut codegen = CodeGenerator::new(&context, "lumora_program", type_checker.functions);
+    let mut codegen = CodeGenerator::new(&context, "lumora_program", type_checker.functions, args.to_vec());
     let llvm_ir = codegen.generate(&program)?;
 
     Ok(llvm_ir)

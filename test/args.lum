@@ -1,0 +1,25 @@
+ext fn puts(string): i32;
+fn main(): i32 {
+    let count: i32 = arg_count();
+    puts("Argument count: ");
+    puts("TODO: Print count here.\n");
+    if count > 0 {
+        let arg0: string = get_arg(0);
+        puts("Argument 0: ");
+        puts(arg0);
+        puts("\n");
+    }
+    if count > 1 {
+        let arg1: string = get_arg(1);
+        puts("Argument 1: ");
+        puts(arg1);
+        puts("\n");
+    }
+    if count > 2 {
+        let arg2: string = get_arg(2);
+        puts("Argument 2: ");
+        puts(arg2);
+        puts("\n");
+    }
+    return 0;
+}

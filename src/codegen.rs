@@ -21,6 +21,7 @@ pub struct CodeGenerator<'ctx> {
     functions: HashMap<String, FunctionValue<'ctx>>,
     all_functions: HashMap<String, (Vec<LumoraType>, LumoraType)>,
     bb_counter: usize,
+    args: Vec<String>,
 }
 
 impl<'ctx> CodeGenerator<'ctx> {
@@ -28,6 +29,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         context: &'ctx Context,
         module_name: &str,
         all_functions: HashMap<String, (Vec<LumoraType>, LumoraType)>,
+        args: Vec<String>,
     ) -> Self {
         let module = context.create_module(module_name);
         let builder = context.create_builder();
@@ -39,22 +41,29 @@ impl<'ctx> CodeGenerator<'ctx> {
             functions: HashMap::new(),
             all_functions,
             bb_counter: 0,
+            args,
         }
     }
 
     pub fn generate(&mut self, program: &Program) -> Result<String, LumoraError> {
         for (name, (param_types, return_type)) in &self.all_functions {
             let fn_type = {
-                let param_llvm_types: Vec<inkwell::types::BasicMetadataTypeEnum<'ctx>> =
-                    param_types
-                        .iter()
-                        .map(|ty| self.type_to_llvm_type(ty).into())
-                        .collect();
-                match return_type {
-                    LumoraType::Void => self.context.void_type().fn_type(&param_llvm_types, false),
-                    _ => self
-                        .type_to_llvm_type(return_type)
-                        .fn_type(&param_llvm_types, false),
+                if name == "main" {
+                    let i32_type = self.context.i32_type();
+                    let i8_ptr_type = self.context.i8_type().ptr_type(0.into());
+                    i32_type.fn_type(&[i32_type.into(), i8_ptr_type.into()], false)
+                } else {
+                    let param_llvm_types: Vec<inkwell::types::BasicMetadataTypeEnum<'ctx>> =
+                        param_types
+                            .iter()
+                            .map(|ty| self.type_to_llvm_type(ty).into())
+                            .collect();
+                    match return_type {
+                        LumoraType::Void => self.context.void_type().fn_type(&param_llvm_types, false),
+                        _ => self
+                            .type_to_llvm_type(return_type)
+                            .fn_type(&param_llvm_types, false),
+                    }
                 }
             };
             let fn_val = self.module.add_function(name, fn_type, None);
@@ -760,6 +769,31 @@ impl<'ctx> CodeGenerator<'ctx> {
                     Ok(loaded_val.into())
                 }
             }
+            Expr::ArgCount => {
+                let main_fn = self.module.get_function("main").unwrap();
+                let argc = main_fn.get_nth_param(0).unwrap().into_int_value();
+                Ok(argc.into())
+            }
+            Expr::GetArg(index_expr) => {
+                let main_fn = self.module.get_function("main").unwrap();
+                let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
+                let index_val = self.generate_expression(index_expr)?.into_int_value();
+
+                let arg_ptr = unsafe {
+                    self.builder.build_gep(
+                        self.context.i8_type().ptr_type(0.into()),
+                        argv,
+                        &[index_val],
+                        "arg_ptr",
+                    )?
+                };
+                let loaded_arg = self.builder.build_load(
+                    self.context.i8_type().ptr_type(0.into()),
+                    arg_ptr,
+                    "loaded_arg",
+                )?;
+                Ok(loaded_arg.into())
+            }
         }
     }
 
@@ -868,6 +902,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                 };
                 Ok(*inner_type)
             }
+            Expr::ArgCount => Ok(LumoraType::I32),
+            Expr::GetArg(_) => Ok(LumoraType::String),
         }
     }
 }

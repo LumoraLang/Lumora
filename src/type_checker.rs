@@ -433,6 +433,22 @@ impl TypeChecker {
                     }
                 }
             }
+            Expr::ArgCount => Ok(LumoraType::I32),
+            Expr::GetArg(index_expr) => {
+                let index_type = self.check_expression(index_expr)?;
+                match index_type {
+                    LumoraType::I32 | LumoraType::I64 => Ok(LumoraType::String),
+                    _ => {
+                        return Err(LumoraError::TypeError {
+                            code: "L044".to_string(),
+                            span: None,
+                            message: "Argument index must be an integer type (i32 or i64)."
+                                .to_string(),
+                            help: None,
+                        });
+                    }
+                }
+            }
         }
     }
 }

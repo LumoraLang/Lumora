@@ -41,6 +41,8 @@ pub enum Expr {
         index: Box<Expr>,
     },
     Null,
+    ArgCount,
+    GetArg(Box<Expr>),
 }
 
 #[derive(Debug, Clone)]

@@ -569,7 +569,16 @@ impl Parser {
                 Token::StringLiteral(s) => Ok(Expr::StringLiteral(s.clone())),
                 Token::Identifier(name_token) => {
                     let name = name_token.clone();
-                    if matches!(self.peek().map(|s| &s.value), Some(Token::LeftParen)) {
+                    if name == "arg_count" {
+                        self.expect(&Token::LeftParen)?;
+                        self.expect(&Token::RightParen)?;
+                        Ok(Expr::ArgCount)
+                    } else if name == "get_arg" {
+                        self.expect(&Token::LeftParen)?;
+                        let index = self.parse_expression()?;
+                        self.expect(&Token::RightParen)?;
+                        Ok(Expr::GetArg(Box::new(index)))
+                    } else if matches!(self.peek().map(|s| &s.value), Some(Token::LeftParen)) {
                         self.advance();
                         let mut args = Vec::new();
 

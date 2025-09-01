@@ -169,7 +169,7 @@ fn run() -> Result<(), LumoraError> {
                 ),
             }
         })?;
-        let imported_llvm_ir = compile_lumora(&imported_source_code)?;
+        let imported_llvm_ir = compile_lumora(&imported_source_code, &[])?;
         let imported_ll_file = output_dir.join(format!("{}.ll", imported_output_name));
         fs::write(&imported_ll_file, imported_llvm_ir).map_err(|e| {
             LumoraError::ConfigurationError {
@@ -223,7 +223,8 @@ fn run() -> Result<(), LumoraError> {
         imported_bc_files.push(imported_bc_file);
     }
 
-    let llvm_ir = compile_lumora(&source_code)?;
+    let args: Vec<String> = std::env::args().collect();
+    let llvm_ir = compile_lumora(&source_code, &args)?;
     let ll_file = output_dir.join(format!(
         "{}.ll",
         output_name.file_name().unwrap().to_str().unwrap()
@@ -271,7 +272,7 @@ fn run() -> Result<(), LumoraError> {
         } else {
             Some(&config.build_settings.target_triple)
         }
-    });
+        });
 
     if let Some(target_triple) = effective_target_triple {
         llc_command.arg(format!("-mtriple={}", target_triple));
@@ -357,7 +358,7 @@ fn run() -> Result<(), LumoraError> {
                 if let Some(target_triple) = effective_target_triple {
                     clang_compile_command.arg(format!("-target={}", target_triple));
                 }
-                clang_compile_command.arg("-fPIE"); // TODO: add an option to disable this
+                clang_compile_command.arg("-fPIE");
                 let compile_output =
                     clang_compile_command
                         .output()
