@@ -1,5 +1,6 @@
 use crate::ast::{
-    BinaryOp, Expr, ExternalFunction, Function, LumoraType, Program, Stmt, TopLevelDeclaration, UnaryOp,
+    BinaryOp, Expr, ExternalFunction, Function, LumoraType, Program, Stmt, TopLevelDeclaration,
+    UnaryOp,
 };
 use crate::errors::{LumoraError, Span};
 use crate::lexer::{Spanned, Token};

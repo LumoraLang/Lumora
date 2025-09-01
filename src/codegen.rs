@@ -1,5 +1,7 @@
 extern crate libc;
-use crate::ast::{BinaryOp, Expr, Function, LumoraType, Program, Stmt, TopLevelDeclaration, UnaryOp};
+use crate::ast::{
+    BinaryOp, Expr, Function, LumoraType, Program, Stmt, TopLevelDeclaration, UnaryOp,
+};
 use crate::errors::LumoraError;
 use inkwell::Either;
 use inkwell::IntPredicate;
@@ -343,7 +345,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     global_string.set_linkage(Linkage::Private);
                     Ok(global_string.as_pointer_value().into())
                 }
-            },
+            }
             Expr::Identifier(name) => {
                 let (ptr, lumora_type) = self.variables.get(name).unwrap();
                 let loaded_value_ref = unsafe {
@@ -386,7 +388,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                         Ok(unsafe { inkwell::values::PointerValue::new(loaded_value_ref).into() })
                     }
                 }
-            },
+            }
             Expr::Binary { left, op, right } => {
                 let left_val = self.generate_expression(left)?;
                 let right_val = self.generate_expression(right)?;
@@ -881,7 +883,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                         }
                     }
                 }
-            },
+            }
             Expr::ArrayLiteral(elements) => {
                 let element_type = self.type_of_expression(expr)?;
                 let LumoraType::Array(inner_type) = element_type else {
@@ -912,7 +914,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     self.builder.build_store(ptr, element_val)?;
                 }
                 Ok(array_alloca.into())
-            },
+            }
             Expr::ArrayIndex { array, index } => {
                 let array_ptr = self.generate_expression(array)?.into_pointer_value();
                 let index_val = self.generate_expression(index)?.into_int_value();
@@ -962,12 +964,12 @@ impl<'ctx> CodeGenerator<'ctx> {
                 } else {
                     Ok(loaded_val.into())
                 }
-            },
+            }
             Expr::ArgCount => {
                 let main_fn = self.module.get_function("main").unwrap();
                 let argc = main_fn.get_nth_param(0).unwrap().into_int_value();
                 Ok(argc.into())
-            },
+            }
             Expr::GetArg(index_expr) => {
                 let main_fn = self.module.get_function("main").unwrap();
                 let argv = main_fn.get_nth_param(1).unwrap().into_pointer_value();
@@ -987,7 +989,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     "loaded_arg",
                 )?;
                 Ok(loaded_arg.into())
-            },
+            }
             Expr::StringOf(expr) => {
                 let val = self.generate_expression(expr)?;
                 let expr_type = self.type_of_expression(expr)?;
@@ -1144,7 +1146,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                         help: None,
                     }),
                 }
-            },
+            }
             Expr::I32Of(expr) => {
                 let val = self.generate_expression(expr)?;
                 let expr_type = self.type_of_expression(expr)?;
@@ -1448,41 +1450,40 @@ impl<'ctx> CodeGenerator<'ctx> {
                         help: None,
                     }),
                 }
-            },
+            }
             Expr::Unary { op, right } => {
                 let right_val = self.generate_expression(right)?;
                 let right_type = self.type_of_expression(right)?;
 
                 match op {
-                    UnaryOp::Negate => {
-                        match right_type {
-                            LumoraType::I32 | LumoraType::I64 => {
-                                Ok(self.builder.build_int_neg(right_val.into_int_value(), "neg")?.into())
-                            }
-                            LumoraType::F32 | LumoraType::F64 => {
-                                Ok(self.builder.build_float_neg(right_val.into_float_value(), "fneg")?.into())
-                            }
-                            _ => Err(LumoraError::CodegenError {
-                                code: "L059".to_string(),
-                                span: None,
-                                message: format!("Unsupported type for negation: {:?}", right_type),
-                                help: None,
-                            }),
-                        }
-                    }
-                    UnaryOp::Not => {
-                        match right_type {
-                            LumoraType::Bool => {
-                                Ok(self.builder.build_not(right_val.into_int_value(), "not")?.into())
-                            }
-                            _ => Err(LumoraError::CodegenError {
-                                code: "L060".to_string(),
-                                span: None,
-                                message: format!("Unsupported type for logical NOT: {:?}", right_type),
-                                help: None,
-                            }),
-                        }
-                    }
+                    UnaryOp::Negate => match right_type {
+                        LumoraType::I32 | LumoraType::I64 => Ok(self
+                            .builder
+                            .build_int_neg(right_val.into_int_value(), "neg")?
+                            .into()),
+                        LumoraType::F32 | LumoraType::F64 => Ok(self
+                            .builder
+                            .build_float_neg(right_val.into_float_value(), "fneg")?
+                            .into()),
+                        _ => Err(LumoraError::CodegenError {
+                            code: "L059".to_string(),
+                            span: None,
+                            message: format!("Unsupported type for negation: {:?}", right_type),
+                            help: None,
+                        }),
+                    },
+                    UnaryOp::Not => match right_type {
+                        LumoraType::Bool => Ok(self
+                            .builder
+                            .build_not(right_val.into_int_value(), "not")?
+                            .into()),
+                        _ => Err(LumoraError::CodegenError {
+                            code: "L060".to_string(),
+                            span: None,
+                            message: format!("Unsupported type for logical NOT: {:?}", right_type),
+                            help: None,
+                        }),
+                    },
                 }
             }
         }
@@ -1605,17 +1606,13 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let right_type = self.type_of_expression(right)?;
                 match op {
                     UnaryOp::Negate => match right_type {
-                        LumoraType::I32
-                        | LumoraType::I64
-                        | LumoraType::F32
-                        | LumoraType::F64 => Ok(right_type),
+                        LumoraType::I32 | LumoraType::I64 | LumoraType::F32 | LumoraType::F64 => {
+                            Ok(right_type)
+                        }
                         _ => Err(LumoraError::CodegenError {
                             code: "L059".to_string(),
                             span: None,
-                            message: format!(
-                                "Unsupported type for negation: {:?}",
-                                right_type
-                            ),
+                            message: format!("Unsupported type for negation: {:?}", right_type),
                             help: None,
                         }),
                     },
@@ -1624,13 +1621,10 @@ impl<'ctx> CodeGenerator<'ctx> {
                         _ => Err(LumoraError::CodegenError {
                             code: "L060".to_string(),
                             span: None,
-                            message: format!(
-                                "Unsupported type for logical NOT: {:?}",
-                                right_type
-                            ),
+                            message: format!("Unsupported type for logical NOT: {:?}", right_type),
                             help: None,
                         }),
-                    }
+                    },
                 }
             }
         }
