@@ -21,7 +21,7 @@ test_settings:
   run_tests_on_build: true
   test_dir: tests
 dependencies:
-- name: Spoon-Knife
-  source: octocat/Spoon-Knife
-  path: .lumora/Spoon-Knife
-  version: d0dd1f61b33d64e29d8bc1372a94ef6a2fee76a9
+- name: stdlib
+  source: dir:../stdlib
+  path: .lumora/stdlib
+  version: unknown

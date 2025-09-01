@@ -3,6 +3,7 @@ use crate::ast::{
 };
 use crate::errors::{LumoraError, Span};
 use crate::lexer::{Spanned, Token};
+use std::path::PathBuf;
 pub struct Parser {
     tokens: Vec<Spanned<Token>>,
     current: usize,
@@ -99,7 +100,7 @@ impl Parser {
             }
         }
 
-        Ok(Program { uses, declarations })
+        Ok(Program { uses, declarations, input_file: PathBuf::from(self.file_name.clone()) })
     }
 
     fn parse_function(&mut self) -> Result<Function, LumoraError> {

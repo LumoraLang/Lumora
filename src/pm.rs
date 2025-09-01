@@ -143,7 +143,7 @@ fn print_dir_contents(dir: &Path) -> Result<(), LumoraError> {
 }
 
 fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), LumoraError> {
-    let (repo_url, repo_name) = parse_repository_string(&repository)?;
+    let (source_str, repo_name) = parse_repository_string(&repository)?;
     let install_dir = get_install_dir(user, global)?;
     let target_path = install_dir.join(&repo_name);
 
@@ -158,58 +158,90 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
         .unwrap()
         .tick_chars(r"-\/ ");
 
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(spinner_style.clone());
-    pb.set_message(format!("Cloning {} into {}...", repo_url, target_path.display()));
-    pb.enable_steady_tick(Duration::from_millis(100));
+    if source_str.starts_with("dir:") {
+        let source_path = PathBuf::from(source_str.trim_start_matches("dir:"));
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(spinner_style.clone());
+        pb.set_message(format!("Copying local directory {} to {}...", source_path.display(), target_path.display()));
+        pb.enable_steady_tick(Duration::from_millis(100));
 
-    let output = Command::new("git")
-        .arg("clone")
-        .arg(&repo_url)
-        .arg(&target_path)
-        .output()
-        .map_err(|e| LumoraError::ConfigurationError {
-            message: format!("Failed to execute git clone: {}", e),
-            help: Some("Ensure git is installed and in your PATH.".to_string()),
-        })?;
+        let output = Command::new("cp")
+            .arg("-r")
+            .arg(&source_path)
+            .arg(&target_path)
+            .output()
+            .map_err(|e| LumoraError::ConfigurationError {
+                message: format!("Failed to copy local directory: {}", e),
+                help: Some("Ensure you have read permissions for the source and write permissions for the destination.".to_string()),
+            })?;
 
-    pb.finish_and_clear();
+        pb.finish_and_clear();
 
-    if !output.status.success() {
-        return Err(LumoraError::ConfigurationError {
-            message: format!(
-                "Git clone failed: {}",
+        if !output.status.success() {
+            return Err(LumoraError::ConfigurationError {
+                message: format!(
+                    "Failed to copy local directory: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ),
+                help: None,
+            });
+        }
+        println!("Successfully added local dependency '{}' to {}.", repo_name, target_path.display());
+    } else {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(spinner_style.clone());
+        pb.set_message(format!("Cloning {} into {}...", source_str, target_path.display()));
+        pb.enable_steady_tick(Duration::from_millis(100));
+
+        let output = Command::new("git")
+            .arg("clone")
+            .arg(&source_str)
+            .arg(&target_path)
+            .output()
+            .map_err(|e| LumoraError::ConfigurationError {
+                message: format!("Failed to execute git clone: {}", e),
+                help: Some("Ensure git is installed and in your PATH.".to_string()),
+            })?;
+
+        pb.finish_and_clear();
+
+        if !output.status.success() {
+            return Err(LumoraError::ConfigurationError {
+                message: format!(
+                    "Git clone failed: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ),
+                help: None,
+            });
+        }
+
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(spinner_style.clone());
+        pb.set_message(format!("Updating submodules for {}...", repo_name));
+        pb.enable_steady_tick(Duration::from_millis(100));
+
+        let output = Command::new("git")
+            .arg("submodule")
+            .arg("update")
+            .arg("--init")
+            .arg("--recursive")
+            .current_dir(&target_path)
+            .output()
+            .map_err(|e| LumoraError::ConfigurationError {
+                message: format!("Failed to execute git submodule update: {}", e),
+                help: Some("Ensure git is installed and in your PATH.".to_string()),
+            })?;
+
+        pb.finish_and_clear();
+
+        if !output.status.success() {
+            eprintln!(
+                "Warning: Git submodule update failed for {}: {}",
+                repo_name,
                 String::from_utf8_lossy(&output.stderr)
-            ),
-            help: None,
-        });
-    }
-
-    let pb = ProgressBar::new_spinner();
-    pb.set_style(spinner_style.clone());
-    pb.set_message(format!("Updating submodules for {}...", repo_name));
-    pb.enable_steady_tick(Duration::from_millis(100));
-
-    let output = Command::new("git")
-        .arg("submodule")
-        .arg("update")
-        .arg("--init")
-        .arg("--recursive")
-        .current_dir(&target_path)
-        .output()
-        .map_err(|e| LumoraError::ConfigurationError {
-            message: format!("Failed to execute git submodule update: {}", e),
-            help: Some("Ensure git is installed and in your PATH.".to_string()),
-        })?;
-
-    pb.finish_and_clear();
-
-    if !output.status.success() {
-        eprintln!(
-            "Warning: Git submodule update failed for {}: {}",
-            repo_name,
-            String::from_utf8_lossy(&output.stderr)
-        );
+            );
+        }
+        println!("Successfully added git dependency '{}' to {}.", repo_name, target_path.display());
     }
 
     let output = Command::new("git")
@@ -247,8 +279,6 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
         help: None,
     })?;
 
-    println!("Successfully added dependency '{}' to {}.", repo_name, target_path.display());
-
     let mut visited: HashSet<PathBuf> = HashSet::new();
     visited.insert(target_path.clone());
     install_nested_dependencies(&target_path, &mut visited, "  ")?;
@@ -273,6 +303,17 @@ fn parse_repository_string(repo_string: &str) -> Result<(String, String), Lumora
                 help: Some("Expected format: gl:username/repo".to_string()),
             })
         }
+    } else if repo_string.starts_with("dir:") {
+        let path_str = repo_string.trim_start_matches("dir:").to_string();
+        let path = PathBuf::from(&path_str);
+        if !path.exists() {
+            return Err(LumoraError::ConfigurationError {
+                message: format!("Local directory does not exist: {}", path_str),
+                help: None,
+            });
+        }
+        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        Ok((path_str, name))
     } else if repo_string.contains('/') {
         let parts: Vec<&str> = repo_string.splitn(2, '/').collect();
         if parts.len() == 2 {
@@ -288,7 +329,7 @@ fn parse_repository_string(repo_string: &str) -> Result<(String, String), Lumora
     } else {
         Err(LumoraError::ConfigurationError {
             message: format!("Invalid repository string: {}", repo_string),
-            help: Some("Expected format: username/repo, gl:username/repo, or git:https://url.git".to_string()),
+            help: Some("Expected format: username/repo, gl:username/repo, git:https://url.git, or dir:/path/to/local/repo".to_string()),
         })
     }
 }
@@ -392,7 +433,10 @@ fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>,
         let (repo_url, repo_name) = parse_repository_string(&dep.source)?;
         let target_path = parent_lumora_dir.join(&repo_name);
 
-        if target_path.exists() {
+        if dep.source.starts_with("dir:") {
+            pb.finish_and_clear();
+            println!("{}{}Skipping git operations for local dependency '{}'.", next_indent, next_indent, dep.name);
+        } else if target_path.exists() {
             pb.set_message(format!("{}{}Nested dependency '{}' already exists. Pulling latest changes...", next_indent, next_indent, dep.name));
             let output = Command::new("git")
                 .arg("pull")
@@ -438,31 +482,33 @@ fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>,
             }
         }
 
-        let pb_sub = ProgressBar::new_spinner();
-        pb_sub.set_style(spinner_style.clone());
-        pb_sub.set_message(format!("{}{}Updating submodules for {}...", next_indent, next_indent, dep.name));
-        pb_sub.enable_steady_tick(Duration::from_millis(100));
+        if !dep.source.starts_with("dir:") {
+            let pb_sub = ProgressBar::new_spinner();
+            pb_sub.set_style(spinner_style.clone());
+            pb_sub.set_message(format!("{}{}Updating submodules for {}...", next_indent, next_indent, dep.name));
+            pb_sub.enable_steady_tick(Duration::from_millis(100));
 
-        let output = Command::new("git")
-            .arg("submodule")
-            .arg("update")
-            .arg("--init")
-            .arg("--recursive")
-            .current_dir(&target_path)
-            .output()
-            .map_err(|e| LumoraError::ConfigurationError {
-                message: format!("Failed to execute git submodule update for {}: {}", dep.name, e),
-                help: Some("Ensure git is installed and in your PATH.".to_string()),
-            })?;
+            let output = Command::new("git")
+                .arg("submodule")
+                .arg("update")
+                .arg("--init")
+                .arg("--recursive")
+                .current_dir(&target_path)
+                .output()
+                .map_err(|e| LumoraError::ConfigurationError {
+                    message: format!("Failed to execute git submodule update for {}: {}", dep.name, e),
+                    help: Some("Ensure git is installed and in your PATH.".to_string()),
+                })?;
 
-        pb_sub.finish_and_clear();
+            pb_sub.finish_and_clear();
 
-        if !output.status.success() {
-            eprintln!(
-                "{}{}Warning: Git submodule update failed for {}: {}",
-                next_indent, next_indent, dep.name,
-                String::from_utf8_lossy(&output.stderr)
-            );
+            if !output.status.success() {
+                eprintln!(
+                    "{}{}Warning: Git submodule update failed for {}: {}",
+                    next_indent, next_indent, dep.name,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
 
         install_nested_dependencies(&target_path, visited, &next_indent)?;
@@ -495,7 +541,10 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
         let target_path = dep.path;
         let repo_url = parse_repository_string(&dep.source)?.0;
 
-        if target_path.exists() {
+        if dep.source.starts_with("dir:") {
+            pb.finish_and_clear();
+            println!("Skipping git operations for local dependency '{}'.", dep.name);
+        } else if target_path.exists() {
             pb.set_message(format!("Dependency '{}' already exists at {}. Pulling latest changes...", dep.name, target_path.display()));
             let output = Command::new("git")
                 .arg("pull")
@@ -541,31 +590,33 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
             }
         }
 
-        let pb_sub = ProgressBar::new_spinner();
-        pb_sub.set_style(spinner_style.clone());
-        pb_sub.set_message(format!("Updating submodules for {}...", dep.name));
-        pb_sub.enable_steady_tick(Duration::from_millis(100));
+        if !dep.source.starts_with("dir:") {
+            let pb_sub = ProgressBar::new_spinner();
+            pb_sub.set_style(spinner_style.clone());
+            pb_sub.set_message(format!("Updating submodules for {}...", dep.name));
+            pb_sub.enable_steady_tick(Duration::from_millis(100));
 
-        let output = Command::new("git")
-            .arg("submodule")
-            .arg("update")
-            .arg("--init")
-            .arg("--recursive")
-            .current_dir(&target_path)
-            .output()
-            .map_err(|e| LumoraError::ConfigurationError {
-                message: format!("Failed to execute git submodule update for {}: {}", dep.name, e),
-                help: Some("Ensure git is installed and in your PATH.".to_string()),
-            })?;
+            let output = Command::new("git")
+                .arg("submodule")
+                .arg("update")
+                .arg("--init")
+                .arg("--recursive")
+                .current_dir(&target_path)
+                .output()
+                .map_err(|e| LumoraError::ConfigurationError {
+                    message: format!("Failed to execute git submodule update for {}: {}", dep.name, e),
+                    help: Some("Ensure git is installed and in your PATH.".to_string()),
+                })?;
 
-        pb_sub.finish_and_clear();
+            pb_sub.finish_and_clear();
 
-        if !output.status.success() {
-            eprintln!(
-                "Warning: Git submodule update failed for {}: {}",
-                dep.name,
-                String::from_utf8_lossy(&output.stderr)
-            );
+            if !output.status.success() {
+                eprintln!(
+                    "Warning: Git submodule update failed for {}: {}",
+                    dep.name,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
         }
 
         install_nested_dependencies(&target_path, &mut visited, "  ")?;

@@ -3,4 +3,5 @@
 /build
 /.lumora
 /test/.lumora
-lumora.yaml
+/lumora.yaml
+/stdlib

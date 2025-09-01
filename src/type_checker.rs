@@ -4,6 +4,7 @@ use crate::lexer::{Spanned, Token};
 use crate::parser::Parser;
 use logos::Logos;
 use std::collections::HashMap;
+use crate::resolve_module_path;
 
 pub struct TypeChecker {
     variables: HashMap<String, LumoraType>,
@@ -20,12 +21,12 @@ impl TypeChecker {
 
     pub fn check_program(&mut self, program: &Program) -> Result<(), LumoraError> {
         for module_name in &program.uses {
-            let module_path = module_name.clone();
+            let imported_lum_file = resolve_module_path(module_name, &program.input_file)?;
             let imported_source =
-                std::fs::read_to_string(&module_path).map_err(|e| LumoraError::ParseError {
+                std::fs::read_to_string(&imported_lum_file).map_err(|e| LumoraError::ParseError {
                     code: "L017".to_string(),
                     span: None,
-                    message: format!("Could not read imported module {}: {}", module_path, e),
+                    message: format!("Could not read imported module {}: {}", imported_lum_file.display(), e),
                     help: None,
                 })?;
             let mut lexer = Token::lexer(&imported_source).spanned();
@@ -35,7 +36,7 @@ impl TypeChecker {
                     code: "L018".to_string(),
                     span: Some(Span::new(
                         span.clone(),
-                        module_path.clone(),
+                        imported_lum_file.to_string_lossy().to_string(),
                         &imported_source,
                     )),
                     message: "Lexing error in imported module: Unrecognized token".to_string(),
@@ -44,7 +45,7 @@ impl TypeChecker {
                 tokens.push(Spanned { value: token, span });
             }
 
-            let mut parser = Parser::new(tokens, module_path.clone(), imported_source.clone());
+            let mut parser = Parser::new(tokens, imported_lum_file.to_string_lossy().to_string(), imported_source.clone());
             let imported_program = parser.parse()?;
             let mut imported_type_checker = TypeChecker::new();
             imported_type_checker.check_program(&imported_program)?;
@@ -275,7 +276,38 @@ impl TypeChecker {
                 let right_type = self.check_expression(right)?;
 
                 match op {
-                    BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div => {
+                    BinaryOp::Add => {
+                        match (left_type, right_type) {
+                            (LumoraType::I32, LumoraType::I32) => Ok(LumoraType::I32),
+                            (LumoraType::I64, LumoraType::I64) => Ok(LumoraType::I64),
+                            (LumoraType::F64, LumoraType::F64) => Ok(LumoraType::F64),
+                            (LumoraType::String, LumoraType::String) => Ok(LumoraType::String),
+                            _ => Err(LumoraError::TypeError {
+                                code: "L022".to_string(),
+                                span: None,
+                                message: "Addition requires operands of the same numeric type or both strings".to_string(),
+                                help: None,
+                            }),
+                        }
+                    }
+                    BinaryOp::Mul => {
+                        match (left_type, right_type) {
+                            (LumoraType::I32, LumoraType::I32) => Ok(LumoraType::I32),
+                            (LumoraType::I64, LumoraType::I64) => Ok(LumoraType::I64),
+                            (LumoraType::F64, LumoraType::F64) => Ok(LumoraType::F64),
+                            (LumoraType::String, LumoraType::I32) => Ok(LumoraType::String),
+                            (LumoraType::String, LumoraType::I64) => Ok(LumoraType::String),
+                            (LumoraType::I32, LumoraType::String) => Ok(LumoraType::String),
+                            (LumoraType::I64, LumoraType::String) => Ok(LumoraType::String),
+                            _ => Err(LumoraError::TypeError {
+                                code: "L022".to_string(),
+                                span: None,
+                                message: "Multiplication requires operands of the same numeric type or string and integer".to_string(),
+                                help: None,
+                            }),
+                        }
+                    }
+                    BinaryOp::Sub | BinaryOp::Div => {
                         match (left_type, right_type) {
                             (LumoraType::I32, LumoraType::I32) => Ok(LumoraType::I32),
                             (LumoraType::I64, LumoraType::I64) => Ok(LumoraType::I64),

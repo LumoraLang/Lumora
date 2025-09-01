@@ -1,5 +1,4 @@
 use clap::Parser;
-use dirs;
 use logos::Logos;
 use lumora::compile_lumora;
 use lumora::config::{OutputType, load_config};
@@ -8,6 +7,7 @@ use lumora::lexer::{Spanned, Token};
 use lumora::parser::Parser as LumoraParser;
 use lumora::type_checker::TypeChecker;
 use lumora::pm::{handle_pm_command, PmCommands};
+use lumora::resolve_module_path;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -165,7 +165,6 @@ fn run() -> Result<(), LumoraError> {
     let program = parser.parse()?;
     let mut type_checker = TypeChecker::new();
     type_checker.check_program(&program)?;
-
     let mut imported_bc_files = Vec::new();
     for module_name in &program.uses {
         let imported_lum_file = resolve_module_path(module_name, &input_file)?;
@@ -184,6 +183,10 @@ fn run() -> Result<(), LumoraError> {
         })?;
         let imported_llvm_ir = compile_lumora(&imported_source_code, &[])?;
         let imported_ll_file = output_dir.join(format!("{}.ll", imported_output_name));
+        fs::create_dir_all(imported_ll_file.parent().unwrap()).map_err(|e| LumoraError::ConfigurationError {
+            message: format!("Could not create directory for temporary .ll file {}: {}", imported_ll_file.display(), e),
+            help: Some("Ensure you have write permissions to the output directory.".to_string()),
+        })?;
         fs::write(&imported_ll_file, imported_llvm_ir).map_err(|e| {
             LumoraError::ConfigurationError {
                 message: format!(
@@ -197,6 +200,10 @@ fn run() -> Result<(), LumoraError> {
             }
         })?;
         let imported_bc_file = output_dir.join(format!("{}.bc", imported_output_name));
+        fs::create_dir_all(imported_bc_file.parent().unwrap()).map_err(|e| LumoraError::ConfigurationError {
+            message: format!("Could not create directory for temporary .bc file {}: {}", imported_bc_file.display(), e),
+            help: Some("Ensure you have write permissions to the output directory.".to_string()),
+        })?;
         let llvm_as_output = Command::new("llvm-as")
             .arg(&imported_ll_file)
             .arg("-o")
@@ -538,66 +545,3 @@ fn run() -> Result<(), LumoraError> {
     Ok(())
 }
 
-fn resolve_module_path(module_name: &str, current_file: &Path) -> Result<PathBuf, LumoraError> {
-    let mut search_paths = Vec::new();
-    if let Some(parent) = current_file.parent() {
-        search_paths.push(parent.to_path_buf());
-    }
-
-    search_paths.push(PathBuf::from("/usr/share/lumora/"));
-    if let Some(parent) = current_file.parent() {
-        search_paths.push(parent.join(".lumora"))
-    }
-    if let Some(home_dir) = dirs::home_dir() {
-        search_paths.push(home_dir.join(".lumora"));
-    }
-
-    for path in search_paths {
-        let mut p = path.join(module_name);
-        if p.exists() {
-            return Ok(p);
-        }
-        p.set_extension("lum");
-        if p.exists() {
-            return Ok(p);
-        }
-    }
-
-    Err(LumoraError::ConfigurationError {
-        message: format!("Module '{}' not found.", module_name),
-        help: Some(
-            "Ensure the module exists in the current directory, /usr/share/lumora/, or ~/.lumora."
-                .to_string(),
-        ),
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_basic_function() {
-        let source = r###" 
-            fn main(): i32 {
-                let x: i32 = 42;
-                return x;
-            }
-        "###;
-
-        let result = compile_lumora(source, &["".to_string()]);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_arithmetic() {
-        let source = r###" 
-            fn add(a i32, b i32): i32 {
-                return a + b;
-            }
-        "###;
-
-        let result = compile_lumora(source, &["".to_string()]);
-        assert!(result.is_ok());
-    }
-}

@@ -1,5 +1,5 @@
-use lib;
+use stdlib/io;
 fn main(): i32 {
-    print("Hello\e[31m Red Text\e[0m Normal Text\n");
+    println("Hello\e[31m Red Text\e[0m Normal Text");
     return 0;
 }

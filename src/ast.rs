@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LumoraType {
@@ -111,4 +112,5 @@ pub enum TopLevelDeclaration {
 pub struct Program {
     pub uses: Vec<String>,
     pub declarations: Vec<TopLevelDeclaration>,
+    pub input_file: PathBuf,
 }
