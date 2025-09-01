@@ -122,7 +122,6 @@ pub struct Dependency {
     pub version: String,
 }
 
-
 impl Default for LumoraConfig {
     fn default() -> Self {
         Self {

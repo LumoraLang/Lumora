@@ -5,9 +5,9 @@ use lumora::config::{OutputType, load_config};
 use lumora::errors::LumoraError;
 use lumora::lexer::{Spanned, Token};
 use lumora::parser::Parser as LumoraParser;
-use lumora::type_checker::TypeChecker;
-use lumora::pm::{handle_pm_command, PmCommands};
+use lumora::pm::{PmCommands, handle_pm_command};
 use lumora::resolve_module_path;
+use lumora::type_checker::TypeChecker;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -121,10 +121,12 @@ fn run() -> Result<(), LumoraError> {
         ),
     })?;
 
-    let input_file = cli.input_file.ok_or_else(|| LumoraError::ConfigurationError {
-        message: "No input file provided for compilation.".to_string(),
-        help: Some("Please provide an input .lum file or use a 'pm' subcommand.".to_string()),
-    })?;
+    let input_file = cli
+        .input_file
+        .ok_or_else(|| LumoraError::ConfigurationError {
+            message: "No input file provided for compilation.".to_string(),
+            help: Some("Please provide an input .lum file or use a 'pm' subcommand.".to_string()),
+        })?;
 
     let output_name = if let Some(output_path) = cli.output {
         output_path
@@ -183,9 +185,17 @@ fn run() -> Result<(), LumoraError> {
         })?;
         let imported_llvm_ir = compile_lumora(&imported_source_code, &[])?;
         let imported_ll_file = output_dir.join(format!("{}.ll", imported_output_name));
-        fs::create_dir_all(imported_ll_file.parent().unwrap()).map_err(|e| LumoraError::ConfigurationError {
-            message: format!("Could not create directory for temporary .ll file {}: {}", imported_ll_file.display(), e),
-            help: Some("Ensure you have write permissions to the output directory.".to_string()),
+        fs::create_dir_all(imported_ll_file.parent().unwrap()).map_err(|e| {
+            LumoraError::ConfigurationError {
+                message: format!(
+                    "Could not create directory for temporary .ll file {}: {}",
+                    imported_ll_file.display(),
+                    e
+                ),
+                help: Some(
+                    "Ensure you have write permissions to the output directory.".to_string(),
+                ),
+            }
         })?;
         fs::write(&imported_ll_file, imported_llvm_ir).map_err(|e| {
             LumoraError::ConfigurationError {
@@ -200,9 +210,17 @@ fn run() -> Result<(), LumoraError> {
             }
         })?;
         let imported_bc_file = output_dir.join(format!("{}.bc", imported_output_name));
-        fs::create_dir_all(imported_bc_file.parent().unwrap()).map_err(|e| LumoraError::ConfigurationError {
-            message: format!("Could not create directory for temporary .bc file {}: {}", imported_bc_file.display(), e),
-            help: Some("Ensure you have write permissions to the output directory.".to_string()),
+        fs::create_dir_all(imported_bc_file.parent().unwrap()).map_err(|e| {
+            LumoraError::ConfigurationError {
+                message: format!(
+                    "Could not create directory for temporary .bc file {}: {}",
+                    imported_bc_file.display(),
+                    e
+                ),
+                help: Some(
+                    "Ensure you have write permissions to the output directory.".to_string(),
+                ),
+            }
         })?;
         let llvm_as_output = Command::new("llvm-as")
             .arg(&imported_ll_file)
@@ -292,7 +310,7 @@ fn run() -> Result<(), LumoraError> {
         } else {
             Some(&config.build_settings.target_triple)
         }
-        });
+    });
 
     if let Some(target_triple) = effective_target_triple {
         llc_command.arg(format!("-mtriple={}", target_triple));
@@ -544,4 +562,3 @@ fn run() -> Result<(), LumoraError> {
     );
     Ok(())
 }
-

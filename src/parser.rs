@@ -100,7 +100,11 @@ impl Parser {
             }
         }
 
-        Ok(Program { uses, declarations, input_file: PathBuf::from(self.file_name.clone()) })
+        Ok(Program {
+            uses,
+            declarations,
+            input_file: PathBuf::from(self.file_name.clone()),
+        })
     }
 
     fn parse_function(&mut self) -> Result<Function, LumoraError> {
@@ -701,8 +705,7 @@ impl Parser {
                                 self.file_name.clone(),
                                 &self.source_code,
                             )),
-                            message: "Expected identifier or slash in use statement"
-                                .to_string(),
+                            message: "Expected identifier or slash in use statement".to_string(),
                             help: None,
                         });
                     }

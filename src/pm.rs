@@ -1,12 +1,12 @@
-use std::collections::HashSet;
-use clap::{Parser, Subcommand};
-use std::path::{PathBuf, Path};
 use crate::LumoraError;
+use crate::config::{Dependency, load_config};
+use clap::{Parser, Subcommand};
 use dirs;
-use std::fs;
-use std::process::Command;
-use crate::config::{load_config, Dependency};
 use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::HashSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::Duration;
 
 #[derive(Parser, Debug)]
@@ -52,12 +52,22 @@ pub fn handle_pm_command(command: PmCommands) -> Result<(), LumoraError> {
             println!("Listing dependencies...");
             list_dependencies()?;
         }
-        PmCommands::Add { repository, user, global } => {
-            println!("Adding dependency: {} (user: {}, global: {})", repository, user, global);
+        PmCommands::Add {
+            repository,
+            user,
+            global,
+        } => {
+            println!(
+                "Adding dependency: {} (user: {}, global: {})",
+                repository, user, global
+            );
             add_dependency(repository, user, global)?;
         }
         PmCommands::Rm { name, user, global } => {
-            println!("Removing dependency: {} (user: {}, global: {})", name, user, global);
+            println!(
+                "Removing dependency: {} (user: {}, global: {})",
+                name, user, global
+            );
             remove_dependency(name, user, global)?;
         }
         PmCommands::Install => {
@@ -81,15 +91,24 @@ fn get_global_dir() -> PathBuf {
 }
 
 fn list_dependencies() -> Result<(), LumoraError> {
-    println!("\nLocal dependencies ({}/):\n----------------------------------", get_local_dir().display());
+    println!(
+        "\nLocal dependencies ({}/):\n----------------------------------",
+        get_local_dir().display()
+    );
     print_dir_contents(&get_local_dir())?;
 
     if let Some(user_dir) = get_user_dir() {
-        println!("\nUser dependencies ({}/):\n----------------------------------", user_dir.display());
+        println!(
+            "\nUser dependencies ({}/):\n----------------------------------",
+            user_dir.display()
+        );
         print_dir_contents(&user_dir)?;
     }
 
-    println!("\nGlobal dependencies ({}/):\n----------------------------------", get_global_dir().display());
+    println!(
+        "\nGlobal dependencies ({}/):\n----------------------------------",
+        get_global_dir().display()
+    );
     print_dir_contents(&get_global_dir())?;
 
     Ok(())
@@ -98,11 +117,11 @@ fn list_dependencies() -> Result<(), LumoraError> {
 fn print_dir_contents(dir: &Path) -> Result<(), LumoraError> {
     if !dir.exists() {
         println!("  (Directory does not exist)");
-        return Ok(())
+        return Ok(());
     }
     if !dir.is_dir() {
         println!("  (Not a directory)");
-        return Ok(())
+        return Ok(());
     }
 
     let mut entries: Vec<_> = fs::read_dir(dir)
@@ -121,21 +140,33 @@ fn print_dir_contents(dir: &Path) -> Result<(), LumoraError> {
         for entry in entries {
             let path = entry.path();
             if path.is_dir() {
-                let dep_name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                let dep_name = path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
                 let nested_config_path = path.join("lumora.yaml");
                 match load_config(&nested_config_path.to_string_lossy()) {
                     Ok(cfg) => {
                         println!("  - {} (v{})", cfg.project_name, cfg.version);
-                        println!("    Source: {}", cfg.dependencies.first().map_or("N/A".to_string(), |d| d.source.clone()));
+                        println!(
+                            "    Source: {}",
+                            cfg.dependencies
+                                .first()
+                                .map_or("N/A".to_string(), |d| d.source.clone())
+                        );
                         println!("    Path: {}", path.display());
-                    },
+                    }
                     Err(_) => {
                         println!("  - {} (No lumora.yaml found or invalid)", dep_name);
                         println!("    Path: {}", path.display());
                     }
                 }
             } else {
-                println!("  - {}", path.file_name().unwrap_or_default().to_string_lossy());
+                println!(
+                    "  - {}",
+                    path.file_name().unwrap_or_default().to_string_lossy()
+                );
             }
         }
     }
@@ -149,8 +180,14 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
 
     if target_path.exists() {
         return Err(LumoraError::ConfigurationError {
-            message: format!("Dependency '{}' already exists at {}.", repo_name, target_path.display()),
-            help: Some("Consider running 'lumora pm rm' first if you want to re-add it.".to_string()),
+            message: format!(
+                "Dependency '{}' already exists at {}.",
+                repo_name,
+                target_path.display()
+            ),
+            help: Some(
+                "Consider running 'lumora pm rm' first if you want to re-add it.".to_string(),
+            ),
         });
     }
 
@@ -162,7 +199,11 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
         let source_path = PathBuf::from(source_str.trim_start_matches("dir:"));
         let pb = ProgressBar::new_spinner();
         pb.set_style(spinner_style.clone());
-        pb.set_message(format!("Copying local directory {} to {}...", source_path.display(), target_path.display()));
+        pb.set_message(format!(
+            "Copying local directory {} to {}...",
+            source_path.display(),
+            target_path.display()
+        ));
         pb.enable_steady_tick(Duration::from_millis(100));
 
         let output = Command::new("cp")
@@ -186,11 +227,19 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
                 help: None,
             });
         }
-        println!("Successfully added local dependency '{}' to {}.", repo_name, target_path.display());
+        println!(
+            "Successfully added local dependency '{}' to {}.",
+            repo_name,
+            target_path.display()
+        );
     } else {
         let pb = ProgressBar::new_spinner();
         pb.set_style(spinner_style.clone());
-        pb.set_message(format!("Cloning {} into {}...", source_str, target_path.display()));
+        pb.set_message(format!(
+            "Cloning {} into {}...",
+            source_str,
+            target_path.display()
+        ));
         pb.enable_steady_tick(Duration::from_millis(100));
 
         let output = Command::new("git")
@@ -241,7 +290,11 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
                 String::from_utf8_lossy(&output.stderr)
             );
         }
-        println!("Successfully added git dependency '{}' to {}.", repo_name, target_path.display());
+        println!(
+            "Successfully added git dependency '{}' to {}.",
+            repo_name,
+            target_path.display()
+        );
     }
 
     let output = Command::new("git")
@@ -269,10 +322,11 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
     };
 
     config.dependencies.push(new_dependency);
-    let config_content = serde_yaml::to_string(&config).map_err(|e| LumoraError::ConfigurationError {
-        message: format!("Failed to serialize config to YAML: {}", e),
-        help: None,
-    })?;
+    let config_content =
+        serde_yaml::to_string(&config).map_err(|e| LumoraError::ConfigurationError {
+            message: format!("Failed to serialize config to YAML: {}", e),
+            help: None,
+        })?;
 
     fs::write("lumora.yaml", config_content).map_err(|e| LumoraError::ConfigurationError {
         message: format!("Failed to write lumora.yaml: {}", e),
@@ -289,10 +343,18 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
 fn parse_repository_string(repo_string: &str) -> Result<(String, String), LumoraError> {
     if repo_string.starts_with("git:") {
         let url = repo_string.trim_start_matches("git:").to_string();
-        let name = url.split('/').last().unwrap_or("unknown").trim_end_matches(".git").to_string();
+        let name = url
+            .split('/')
+            .last()
+            .unwrap_or("unknown")
+            .trim_end_matches(".git")
+            .to_string();
         Ok((url, name))
     } else if repo_string.starts_with("gl:") {
-        let parts: Vec<&str> = repo_string.trim_start_matches("gl:").splitn(2, '/').collect();
+        let parts: Vec<&str> = repo_string
+            .trim_start_matches("gl:")
+            .splitn(2, '/')
+            .collect();
         if parts.len() == 2 {
             let url = format!("https://gitlab.com/{}/{}.git", parts[0], parts[1]);
             let name = parts[1].to_string();
@@ -312,7 +374,11 @@ fn parse_repository_string(repo_string: &str) -> Result<(String, String), Lumora
                 help: None,
             });
         }
-        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         Ok((path_str, name))
     } else if repo_string.contains('/') {
         let parts: Vec<&str> = repo_string.splitn(2, '/').collect();
@@ -359,27 +425,41 @@ fn remove_dependency(name: String, user: bool, global: bool) -> Result<(), Lumor
     let target_path = install_dir.join(&name);
     if !target_path.exists() {
         return Err(LumoraError::ConfigurationError {
-            message: format!("Dependency '{}' not found at {}.", name, target_path.display()),
+            message: format!(
+                "Dependency '{}' not found at {}.",
+                name,
+                target_path.display()
+            ),
             help: None,
         });
     }
 
     println!("Removing {} from {}...", name, target_path.display());
     fs::remove_dir_all(&target_path).map_err(|e| LumoraError::ConfigurationError {
-        message: format!("Failed to remove directory {}: {}", target_path.display(), e),
+        message: format!(
+            "Failed to remove directory {}: {}",
+            target_path.display(),
+            e
+        ),
         help: Some("Ensure you have write permissions.".to_string()),
     })?;
 
     let mut config = load_config("lumora.yaml").unwrap_or_default();
     let initial_len = config.dependencies.len();
-    config.dependencies.retain(|dep| dep.name != name || dep.path != target_path);
+    config
+        .dependencies
+        .retain(|dep| dep.name != name || dep.path != target_path);
     if config.dependencies.len() == initial_len {
-        eprintln!("Warning: Dependency '{}' not found in lumora.yaml. Only removed from filesystem.", name);
+        eprintln!(
+            "Warning: Dependency '{}' not found in lumora.yaml. Only removed from filesystem.",
+            name
+        );
     } else {
-        let config_content = serde_yaml::to_string(&config).map_err(|e| LumoraError::ConfigurationError {
-            message: format!("Failed to serialize config to YAML: {}", e),
-            help: None,
-        })?;
+        let config_content =
+            serde_yaml::to_string(&config).map_err(|e| LumoraError::ConfigurationError {
+                message: format!("Failed to serialize config to YAML: {}", e),
+                help: None,
+            })?;
 
         fs::write("lumora.yaml", config_content).map_err(|e| LumoraError::ConfigurationError {
             message: format!("Failed to write lumora.yaml: {}", e),
@@ -390,24 +470,40 @@ fn remove_dependency(name: String, user: bool, global: bool) -> Result<(), Lumor
     Ok(())
 }
 
-fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>, indent: &str) -> Result<(), LumoraError> {
+fn install_nested_dependencies(
+    repo_path: &Path,
+    visited: &mut HashSet<PathBuf>,
+    indent: &str,
+) -> Result<(), LumoraError> {
     let nested_config_path = repo_path.join("lumora.yaml");
     if !nested_config_path.exists() {
-        return Ok(())
+        return Ok(());
     }
 
     if visited.contains(repo_path) {
         return Err(LumoraError::ConfigurationError {
             message: format!("Circular dependency detected: {}", repo_path.display()),
-            help: Some("Review the lumora.yaml files in the dependency chain to break the cycle.".to_string()),
+            help: Some(
+                "Review the lumora.yaml files in the dependency chain to break the cycle."
+                    .to_string(),
+            ),
         });
     }
     visited.insert(repo_path.to_path_buf());
 
-    println!("{}{}Found nested lumora.yaml in {}. Installing its dependencies...", indent, indent, repo_path.display());
+    println!(
+        "{}{}Found nested lumora.yaml in {}. Installing its dependencies...",
+        indent,
+        indent,
+        repo_path.display()
+    );
     let nested_config = load_config(&nested_config_path.to_string_lossy()).map_err(|e| {
         LumoraError::ConfigurationError {
-            message: format!("Failed to load nested lumora.yaml from {}: {}", nested_config_path.display(), e),
+            message: format!(
+                "Failed to load nested lumora.yaml from {}: {}",
+                nested_config_path.display(),
+                e
+            ),
             help: None,
         }
     })?;
@@ -421,12 +517,19 @@ fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>,
     for dep in nested_config.dependencies {
         let pb = ProgressBar::new_spinner();
         pb.set_style(spinner_style.clone());
-        pb.set_message(format!("{}{}Nested dependency: {} from {}", next_indent, next_indent, dep.name, dep.source));
+        pb.set_message(format!(
+            "{}{}Nested dependency: {} from {}",
+            next_indent, next_indent, dep.name, dep.source
+        ));
         pb.enable_steady_tick(Duration::from_millis(100));
 
         let parent_lumora_dir = repo_path.join(".lumora");
         fs::create_dir_all(&parent_lumora_dir).map_err(|e| LumoraError::ConfigurationError {
-            message: format!("Could not create directory {}: {}", parent_lumora_dir.display(), e),
+            message: format!(
+                "Could not create directory {}: {}",
+                parent_lumora_dir.display(),
+                e
+            ),
             help: None,
         })?;
 
@@ -435,9 +538,15 @@ fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>,
 
         if dep.source.starts_with("dir:") {
             pb.finish_and_clear();
-            println!("{}{}Skipping git operations for local dependency '{}'.", next_indent, next_indent, dep.name);
+            println!(
+                "{}{}Skipping git operations for local dependency '{}'.",
+                next_indent, next_indent, dep.name
+            );
         } else if target_path.exists() {
-            pb.set_message(format!("{}{}Nested dependency '{}' already exists. Pulling latest changes...", next_indent, next_indent, dep.name));
+            pb.set_message(format!(
+                "{}{}Nested dependency '{}' already exists. Pulling latest changes...",
+                next_indent, next_indent, dep.name
+            ));
             let output = Command::new("git")
                 .arg("pull")
                 .current_dir(&target_path)
@@ -452,12 +561,20 @@ fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>,
             if !output.status.success() {
                 eprintln!(
                     "{}{}Warning: Git pull failed for {}: {}",
-                    next_indent, next_indent, dep.name,
+                    next_indent,
+                    next_indent,
+                    dep.name,
                     String::from_utf8_lossy(&output.stderr)
                 );
             }
         } else {
-            pb.set_message(format!("{}{}Cloning {} into {}...", next_indent, next_indent, repo_url, target_path.display()));
+            pb.set_message(format!(
+                "{}{}Cloning {} into {}...",
+                next_indent,
+                next_indent,
+                repo_url,
+                target_path.display()
+            ));
             let output = Command::new("git")
                 .arg("clone")
                 .arg(&repo_url)
@@ -474,7 +591,9 @@ fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>,
                 return Err(LumoraError::ConfigurationError {
                     message: format!(
                         "{}{}Git clone failed for {}: {}",
-                        next_indent, next_indent, dep.name,
+                        next_indent,
+                        next_indent,
+                        dep.name,
                         String::from_utf8_lossy(&output.stderr)
                     ),
                     help: None,
@@ -485,7 +604,10 @@ fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>,
         if !dep.source.starts_with("dir:") {
             let pb_sub = ProgressBar::new_spinner();
             pb_sub.set_style(spinner_style.clone());
-            pb_sub.set_message(format!("{}{}Updating submodules for {}...", next_indent, next_indent, dep.name));
+            pb_sub.set_message(format!(
+                "{}{}Updating submodules for {}...",
+                next_indent, next_indent, dep.name
+            ));
             pb_sub.enable_steady_tick(Duration::from_millis(100));
 
             let output = Command::new("git")
@@ -496,7 +618,10 @@ fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>,
                 .current_dir(&target_path)
                 .output()
                 .map_err(|e| LumoraError::ConfigurationError {
-                    message: format!("Failed to execute git submodule update for {}: {}", dep.name, e),
+                    message: format!(
+                        "Failed to execute git submodule update for {}: {}",
+                        dep.name, e
+                    ),
                     help: Some("Ensure git is installed and in your PATH.".to_string()),
                 })?;
 
@@ -505,7 +630,9 @@ fn install_nested_dependencies(repo_path: &Path, visited: &mut HashSet<PathBuf>,
             if !output.status.success() {
                 eprintln!(
                     "{}{}Warning: Git submodule update failed for {}: {}",
-                    next_indent, next_indent, dep.name,
+                    next_indent,
+                    next_indent,
+                    dep.name,
                     String::from_utf8_lossy(&output.stderr)
                 );
             }
@@ -523,7 +650,7 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
 
     if config.dependencies.is_empty() {
         println!("No dependencies found in lumora.yaml.");
-        return Ok(())
+        return Ok(());
     }
 
     let mut visited: HashSet<PathBuf> = HashSet::new();
@@ -535,7 +662,10 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
     for dep in config.dependencies {
         let pb = ProgressBar::new_spinner();
         pb.set_style(spinner_style.clone());
-        pb.set_message(format!("Installing dependency: {} from {}", dep.name, dep.source));
+        pb.set_message(format!(
+            "Installing dependency: {} from {}",
+            dep.name, dep.source
+        ));
         pb.enable_steady_tick(Duration::from_millis(100));
 
         let target_path = dep.path;
@@ -543,9 +673,16 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
 
         if dep.source.starts_with("dir:") {
             pb.finish_and_clear();
-            println!("Skipping git operations for local dependency '{}'.", dep.name);
+            println!(
+                "Skipping git operations for local dependency '{}'.",
+                dep.name
+            );
         } else if target_path.exists() {
-            pb.set_message(format!("Dependency '{}' already exists at {}. Pulling latest changes...", dep.name, target_path.display()));
+            pb.set_message(format!(
+                "Dependency '{}' already exists at {}. Pulling latest changes...",
+                dep.name,
+                target_path.display()
+            ));
             let output = Command::new("git")
                 .arg("pull")
                 .current_dir(&target_path)
@@ -565,7 +702,11 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
                 );
             }
         } else {
-            pb.set_message(format!("Cloning {} into {}...", repo_url, target_path.display()));
+            pb.set_message(format!(
+                "Cloning {} into {}...",
+                repo_url,
+                target_path.display()
+            ));
             let output = Command::new("git")
                 .arg("clone")
                 .arg(&repo_url)
@@ -604,7 +745,10 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
                 .current_dir(&target_path)
                 .output()
                 .map_err(|e| LumoraError::ConfigurationError {
-                    message: format!("Failed to execute git submodule update for {}: {}", dep.name, e),
+                    message: format!(
+                        "Failed to execute git submodule update for {}: {}",
+                        dep.name, e
+                    ),
                     help: Some("Ensure git is installed and in your PATH.".to_string()),
                 })?;
 

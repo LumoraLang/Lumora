@@ -9,7 +9,7 @@ use inkwell::module::Linkage;
 use inkwell::module::Module;
 use inkwell::types::{AsTypeRef, BasicType, BasicTypeEnum};
 use inkwell::values::AsValueRef;
-use inkwell::values::{BasicValueEnum, FunctionValue, PointerValue, BasicValue};
+use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue};
 use llvm_sys::core::LLVMBuildLoad2;
 use std::collections::HashMap;
 
@@ -69,7 +69,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                             .map(|ty| self.type_to_llvm_type(ty).into())
                             .collect();
                     match return_type {
-                        LumoraType::Void => self.context.void_type().fn_type(&param_llvm_types, false),
+                        LumoraType::Void => {
+                            self.context.void_type().fn_type(&param_llvm_types, false)
+                        }
                         _ => self
                             .type_to_llvm_type(return_type)
                             .fn_type(&param_llvm_types, false),
@@ -390,31 +392,71 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let right_val = self.generate_expression(right)?;
                 let left_lumora_type = self.type_of_expression(left)?;
                 let right_lumora_type = self.type_of_expression(right)?;
-                if left_lumora_type == LumoraType::String || right_lumora_type == LumoraType::String {
+                if left_lumora_type == LumoraType::String || right_lumora_type == LumoraType::String
+                {
                     let i8_ptr_type = self.context.ptr_type(0.into());
                     let i64_type = self.context.i64_type();
                     match op {
                         BinaryOp::Add => {
-                            if left_lumora_type == LumoraType::String && right_lumora_type == LumoraType::String {
+                            if left_lumora_type == LumoraType::String
+                                && right_lumora_type == LumoraType::String
+                            {
                                 let strlen_fn = self.module.get_function("strlen").unwrap();
                                 let strcpy_fn = self.module.get_function("strcpy").unwrap();
                                 let strcat_fn = self.module.get_function("strcat").unwrap();
                                 let malloc_fn = self.module.get_function("malloc").unwrap();
                                 let left_str = left_val.into_pointer_value();
                                 let right_str = right_val.into_pointer_value();
-                                let left_len = self.builder.build_call(strlen_fn, &[left_str.into()], "left_len")?.try_as_basic_value().left().unwrap().into_int_value();
-                                let right_len = self.builder.build_call(strlen_fn, &[right_str.into()], "right_len")?.try_as_basic_value().left().unwrap().into_int_value();
-                                let total_len = self.builder.build_int_add(left_len, right_len, "total_len")?;
-                                let total_len_plus_null = self.builder.build_int_add(total_len, i64_type.const_int(1, false), "total_len_plus_null")?;
-                                let new_str_ptr = self.builder.build_call(malloc_fn, &[total_len_plus_null.into()], "new_str_ptr")?.try_as_basic_value().left().unwrap().into_pointer_value();
-                                self.builder.build_call(strcpy_fn, &[new_str_ptr.into(), left_str.into()], "strcpy_call")?;
-                                self.builder.build_call(strcat_fn, &[new_str_ptr.into(), right_str.into()], "strcat_call")?;
+                                let left_len = self
+                                    .builder
+                                    .build_call(strlen_fn, &[left_str.into()], "left_len")?
+                                    .try_as_basic_value()
+                                    .left()
+                                    .unwrap()
+                                    .into_int_value();
+                                let right_len = self
+                                    .builder
+                                    .build_call(strlen_fn, &[right_str.into()], "right_len")?
+                                    .try_as_basic_value()
+                                    .left()
+                                    .unwrap()
+                                    .into_int_value();
+                                let total_len =
+                                    self.builder
+                                        .build_int_add(left_len, right_len, "total_len")?;
+                                let total_len_plus_null = self.builder.build_int_add(
+                                    total_len,
+                                    i64_type.const_int(1, false),
+                                    "total_len_plus_null",
+                                )?;
+                                let new_str_ptr = self
+                                    .builder
+                                    .build_call(
+                                        malloc_fn,
+                                        &[total_len_plus_null.into()],
+                                        "new_str_ptr",
+                                    )?
+                                    .try_as_basic_value()
+                                    .left()
+                                    .unwrap()
+                                    .into_pointer_value();
+                                self.builder.build_call(
+                                    strcpy_fn,
+                                    &[new_str_ptr.into(), left_str.into()],
+                                    "strcpy_call",
+                                )?;
+                                self.builder.build_call(
+                                    strcat_fn,
+                                    &[new_str_ptr.into(), right_str.into()],
+                                    "strcat_call",
+                                )?;
                                 Ok(new_str_ptr.into())
                             } else {
                                 return Err(LumoraError::CodegenError {
                                     code: "L030".to_string(),
                                     span: None,
-                                    message: "String addition requires both operands to be strings".to_string(),
+                                    message: "String addition requires both operands to be strings"
+                                        .to_string(),
                                     help: None,
                                 });
                             }
@@ -429,28 +471,107 @@ impl<'ctx> CodeGenerator<'ctx> {
                             let strlen_fn = self.module.get_function("strlen").unwrap();
                             let malloc_fn = self.module.get_function("malloc").unwrap();
                             let strcpy_fn = self.module.get_function("strcpy").unwrap();
-                            let str_len = self.builder.build_call(strlen_fn, &[str_val.into()], "str_len")?.try_as_basic_value().left().unwrap().into_int_value();
-                            let total_len = self.builder.build_int_mul(str_len, int_val, "total_len")?;
-                            let total_len_plus_null = self.builder.build_int_add(total_len, i64_type.const_int(1, false), "total_len_plus_null")?;
-                            let new_str_ptr = self.builder.build_call(malloc_fn, &[total_len_plus_null.into()], "new_str_ptr")?.try_as_basic_value().left().unwrap().into_pointer_value();
-                            self.builder.build_store(new_str_ptr, self.context.i8_type().const_int(0, false))?;
-                            let loop_bb = self.context.append_basic_block(self.builder.get_insert_block().unwrap().get_parent().unwrap(), "loop_bb");
-                            let after_loop_bb = self.context.append_basic_block(self.builder.get_insert_block().unwrap().get_parent().unwrap(), "after_loop_bb");
-                            let counter_alloca = self.builder.build_alloca(i64_type, "counter_alloca")?;
-                            self.builder.build_store(counter_alloca, i64_type.const_int(0, false))?;
+                            let str_len = self
+                                .builder
+                                .build_call(strlen_fn, &[str_val.into()], "str_len")?
+                                .try_as_basic_value()
+                                .left()
+                                .unwrap()
+                                .into_int_value();
+                            let total_len =
+                                self.builder.build_int_mul(str_len, int_val, "total_len")?;
+                            let total_len_plus_null = self.builder.build_int_add(
+                                total_len,
+                                i64_type.const_int(1, false),
+                                "total_len_plus_null",
+                            )?;
+                            let new_str_ptr = self
+                                .builder
+                                .build_call(
+                                    malloc_fn,
+                                    &[total_len_plus_null.into()],
+                                    "new_str_ptr",
+                                )?
+                                .try_as_basic_value()
+                                .left()
+                                .unwrap()
+                                .into_pointer_value();
+                            self.builder.build_store(
+                                new_str_ptr,
+                                self.context.i8_type().const_int(0, false),
+                            )?;
+                            let loop_bb = self.context.append_basic_block(
+                                self.builder
+                                    .get_insert_block()
+                                    .unwrap()
+                                    .get_parent()
+                                    .unwrap(),
+                                "loop_bb",
+                            );
+                            let after_loop_bb = self.context.append_basic_block(
+                                self.builder
+                                    .get_insert_block()
+                                    .unwrap()
+                                    .get_parent()
+                                    .unwrap(),
+                                "after_loop_bb",
+                            );
+                            let counter_alloca =
+                                self.builder.build_alloca(i64_type, "counter_alloca")?;
+                            self.builder
+                                .build_store(counter_alloca, i64_type.const_int(0, false))?;
                             self.builder.build_unconditional_branch(loop_bb)?;
                             self.builder.position_at_end(loop_bb);
-                            let current_counter = self.builder.build_load(i64_type, counter_alloca, "current_counter")?.into_int_value();
-                            let loop_cond = self.builder.build_int_compare(IntPredicate::SLT, current_counter, int_val, "loop_cond")?;
-                            self.builder.build_conditional_branch(loop_cond, {
-                                let current_pos_ptr = self.builder.build_call(strlen_fn, &[new_str_ptr.into()], "current_pos_ptr")?.try_as_basic_value().left().unwrap().into_int_value();
-                                let current_pos_gep = unsafe { self.builder.build_gep(i8_ptr_type, new_str_ptr, &[current_pos_ptr.into()], "current_pos_gep").unwrap() };
-                                self.builder.build_call(strcpy_fn, &[current_pos_gep.into(), str_val.into()], "strcpy_loop")?;
+                            let current_counter = self
+                                .builder
+                                .build_load(i64_type, counter_alloca, "current_counter")?
+                                .into_int_value();
+                            let loop_cond = self.builder.build_int_compare(
+                                IntPredicate::SLT,
+                                current_counter,
+                                int_val,
+                                "loop_cond",
+                            )?;
+                            self.builder.build_conditional_branch(
+                                loop_cond,
+                                {
+                                    let current_pos_ptr = self
+                                        .builder
+                                        .build_call(
+                                            strlen_fn,
+                                            &[new_str_ptr.into()],
+                                            "current_pos_ptr",
+                                        )?
+                                        .try_as_basic_value()
+                                        .left()
+                                        .unwrap()
+                                        .into_int_value();
+                                    let current_pos_gep = unsafe {
+                                        self.builder
+                                            .build_gep(
+                                                i8_ptr_type,
+                                                new_str_ptr,
+                                                &[current_pos_ptr.into()],
+                                                "current_pos_gep",
+                                            )
+                                            .unwrap()
+                                    };
+                                    self.builder.build_call(
+                                        strcpy_fn,
+                                        &[current_pos_gep.into(), str_val.into()],
+                                        "strcpy_loop",
+                                    )?;
 
-                                let next_counter = self.builder.build_int_add(current_counter, i64_type.const_int(1, false), "next_counter")?;
-                                self.builder.build_store(counter_alloca, next_counter)?;
-                                loop_bb
-                            }, after_loop_bb)?;
+                                    let next_counter = self.builder.build_int_add(
+                                        current_counter,
+                                        i64_type.const_int(1, false),
+                                        "next_counter",
+                                    )?;
+                                    self.builder.build_store(counter_alloca, next_counter)?;
+                                    loop_bb
+                                },
+                                after_loop_bb,
+                            )?;
 
                             self.builder.position_at_end(after_loop_bb);
                             Ok(new_str_ptr.into())
@@ -873,66 +994,146 @@ impl<'ctx> CodeGenerator<'ctx> {
                 match expr_type {
                     LumoraType::I32 => {
                         let i32_val = val.into_int_value();
-                        let format_str = self.builder.build_global_string_ptr("%d\0", "fmt_i32_str")?;
+                        let format_str = self
+                            .builder
+                            .build_global_string_ptr("%d\0", "fmt_i32_str")?;
                         let sprintf_fn = self.module.get_function("sprintf").unwrap_or_else(|| {
-                            let fn_type = self.context.i32_type().fn_type(&[
-                                self.context.ptr_type(0.into()).into(),
-                                self.context.ptr_type(0.into()).into(),
-                            ], true);
+                            let fn_type = self.context.i32_type().fn_type(
+                                &[
+                                    self.context.ptr_type(0.into()).into(),
+                                    self.context.ptr_type(0.into()).into(),
+                                ],
+                                true,
+                            );
                             self.module.add_function("sprintf", fn_type, None)
                         });
-                        let buffer = self.builder.build_array_alloca(self.context.i8_type(), self.context.i32_type().const_int(20, false), "str_buffer")?;
-                        let _ = self.builder.build_call(sprintf_fn, &[buffer.into(), format_str.as_pointer_value().into(), i32_val.into()], "sprintf_call");
+                        let buffer = self.builder.build_array_alloca(
+                            self.context.i8_type(),
+                            self.context.i32_type().const_int(20, false),
+                            "str_buffer",
+                        )?;
+                        let _ = self.builder.build_call(
+                            sprintf_fn,
+                            &[
+                                buffer.into(),
+                                format_str.as_pointer_value().into(),
+                                i32_val.into(),
+                            ],
+                            "sprintf_call",
+                        );
                         Ok(buffer.into())
                     }
                     LumoraType::I64 => {
                         let i64_val = val.into_int_value();
-                        let format_str = self.builder.build_global_string_ptr("%lld\0", "fmt_i64_str")?;
+                        let format_str = self
+                            .builder
+                            .build_global_string_ptr("%lld\0", "fmt_i64_str")?;
                         let sprintf_fn = self.module.get_function("sprintf").unwrap_or_else(|| {
-                            let fn_type = self.context.i32_type().fn_type(&[
-                                self.context.ptr_type(0.into()).into(),
-                                self.context.ptr_type(0.into()).into(),
-                            ], true);
+                            let fn_type = self.context.i32_type().fn_type(
+                                &[
+                                    self.context.ptr_type(0.into()).into(),
+                                    self.context.ptr_type(0.into()).into(),
+                                ],
+                                true,
+                            );
                             self.module.add_function("sprintf", fn_type, None)
                         });
-                        let buffer = self.builder.build_array_alloca(self.context.i8_type(), self.context.i32_type().const_int(20, false), "str_buffer")?;
-                        let _ = self.builder.build_call(sprintf_fn, &[buffer.into(), format_str.as_pointer_value().into(), i64_val.into()], "sprintf_call");
+                        let buffer = self.builder.build_array_alloca(
+                            self.context.i8_type(),
+                            self.context.i32_type().const_int(20, false),
+                            "str_buffer",
+                        )?;
+                        let _ = self.builder.build_call(
+                            sprintf_fn,
+                            &[
+                                buffer.into(),
+                                format_str.as_pointer_value().into(),
+                                i64_val.into(),
+                            ],
+                            "sprintf_call",
+                        );
                         Ok(buffer.into())
                     }
                     LumoraType::F64 => {
                         let f64_val = val.into_float_value();
-                        let format_str = self.builder.build_global_string_ptr("%f\0", "fmt_f64_str")?;
+                        let format_str = self
+                            .builder
+                            .build_global_string_ptr("%f\0", "fmt_f64_str")?;
                         let sprintf_fn = self.module.get_function("sprintf").unwrap_or_else(|| {
-                            let fn_type = self.context.i32_type().fn_type(&[
-                                self.context.ptr_type(0.into()).into(),
-                                self.context.ptr_type(0.into()).into(),
-                            ], true);
+                            let fn_type = self.context.i32_type().fn_type(
+                                &[
+                                    self.context.ptr_type(0.into()).into(),
+                                    self.context.ptr_type(0.into()).into(),
+                                ],
+                                true,
+                            );
                             self.module.add_function("sprintf", fn_type, None)
                         });
-                        let buffer = self.builder.build_array_alloca(self.context.i8_type(), self.context.i32_type().const_int(30, false), "str_buffer")?;
-                        let _ = self.builder.build_call(sprintf_fn, &[buffer.into(), format_str.as_pointer_value().into(), f64_val.into()], "sprintf_call");
+                        let buffer = self.builder.build_array_alloca(
+                            self.context.i8_type(),
+                            self.context.i32_type().const_int(30, false),
+                            "str_buffer",
+                        )?;
+                        let _ = self.builder.build_call(
+                            sprintf_fn,
+                            &[
+                                buffer.into(),
+                                format_str.as_pointer_value().into(),
+                                f64_val.into(),
+                            ],
+                            "sprintf_call",
+                        );
                         Ok(buffer.into())
                     }
                     LumoraType::F32 => {
                         let f32_val = val.into_float_value();
-                        let f64_val = self.builder.build_float_ext(f32_val, self.context.f64_type(), "f32_to_f64")?;
-                        let format_str = self.builder.build_global_string_ptr("%f\0", "fmt_f32_str")?;
+                        let f64_val = self.builder.build_float_ext(
+                            f32_val,
+                            self.context.f64_type(),
+                            "f32_to_f64",
+                        )?;
+                        let format_str = self
+                            .builder
+                            .build_global_string_ptr("%f\0", "fmt_f32_str")?;
                         let sprintf_fn = self.module.get_function("sprintf").unwrap_or_else(|| {
-                            let fn_type = self.context.i32_type().fn_type(&[
-                                self.context.ptr_type(0.into()).into(),
-                                self.context.ptr_type(0.into()).into(),
-                            ], true);
+                            let fn_type = self.context.i32_type().fn_type(
+                                &[
+                                    self.context.ptr_type(0.into()).into(),
+                                    self.context.ptr_type(0.into()).into(),
+                                ],
+                                true,
+                            );
                             self.module.add_function("sprintf", fn_type, None)
                         });
-                        let buffer = self.builder.build_array_alloca(self.context.i8_type(), self.context.i32_type().const_int(30, false), "str_buffer")?;
-                        let _ = self.builder.build_call(sprintf_fn, &[buffer.into(), format_str.as_pointer_value().into(), f64_val.into()], "sprintf_call");
+                        let buffer = self.builder.build_array_alloca(
+                            self.context.i8_type(),
+                            self.context.i32_type().const_int(30, false),
+                            "str_buffer",
+                        )?;
+                        let _ = self.builder.build_call(
+                            sprintf_fn,
+                            &[
+                                buffer.into(),
+                                format_str.as_pointer_value().into(),
+                                f64_val.into(),
+                            ],
+                            "sprintf_call",
+                        );
                         Ok(buffer.into())
                     }
                     LumoraType::Bool => {
                         let bool_val = val.into_int_value();
-                        let true_str = self.builder.build_global_string_ptr("true\0", "true_str")?;
-                        let false_str = self.builder.build_global_string_ptr("false\0", "false_str")?;
-                        let result_ptr = self.builder.build_select(bool_val, true_str.as_basic_value_enum(), false_str.as_basic_value_enum(), "bool_to_str")?;
+                        let true_str =
+                            self.builder.build_global_string_ptr("true\0", "true_str")?;
+                        let false_str = self
+                            .builder
+                            .build_global_string_ptr("false\0", "false_str")?;
+                        let result_ptr = self.builder.build_select(
+                            bool_val,
+                            true_str.as_basic_value_enum(),
+                            false_str.as_basic_value_enum(),
+                            "bool_to_str",
+                        )?;
                         Ok(result_ptr.into())
                     }
                     LumoraType::String => Ok(val),
@@ -949,17 +1150,50 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let expr_type = self.type_of_expression(expr)?;
                 match expr_type {
                     LumoraType::I32 => Ok(val),
-                    LumoraType::I64 => Ok(self.builder.build_int_truncate(val.into_int_value(), self.context.i32_type(), "trunc_i64_to_i32")?.into()),
-                    LumoraType::F64 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i32_type(), "f64_to_i32")?.into()),
-                    LumoraType::F32 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i32_type(), "f32_to_i32")?.into()),
-                    LumoraType::Bool => Ok(self.builder.build_int_z_extend(val.into_int_value(), self.context.i32_type(), "bool_to_i32")?.into()),
+                    LumoraType::I64 => Ok(self
+                        .builder
+                        .build_int_truncate(
+                            val.into_int_value(),
+                            self.context.i32_type(),
+                            "trunc_i64_to_i32",
+                        )?
+                        .into()),
+                    LumoraType::F64 => Ok(self
+                        .builder
+                        .build_float_to_signed_int(
+                            val.into_float_value(),
+                            self.context.i32_type(),
+                            "f64_to_i32",
+                        )?
+                        .into()),
+                    LumoraType::F32 => Ok(self
+                        .builder
+                        .build_float_to_signed_int(
+                            val.into_float_value(),
+                            self.context.i32_type(),
+                            "f32_to_i32",
+                        )?
+                        .into()),
+                    LumoraType::Bool => Ok(self
+                        .builder
+                        .build_int_z_extend(
+                            val.into_int_value(),
+                            self.context.i32_type(),
+                            "bool_to_i32",
+                        )?
+                        .into()),
                     LumoraType::String => {
                         let str_val = val.into_pointer_value();
                         let atoi_fn = self.module.get_function("atoi").unwrap_or_else(|| {
-                            let fn_type = self.context.i32_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            let fn_type = self
+                                .context
+                                .i32_type()
+                                .fn_type(&[self.context.ptr_type(0.into()).into()], false);
                             self.module.add_function("atoi", fn_type, None)
                         });
-                        let call_result = self.builder.build_call(atoi_fn, &[str_val.into()], "atoi_call");
+                        let call_result =
+                            self.builder
+                                .build_call(atoi_fn, &[str_val.into()], "atoi_call");
                         Ok(call_result?.try_as_basic_value().left().unwrap())
                     }
                     _ => Err(LumoraError::CodegenError {
@@ -974,18 +1208,51 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let val = self.generate_expression(expr)?;
                 let expr_type = self.type_of_expression(expr)?;
                 match expr_type {
-                    LumoraType::I32 => Ok(self.builder.build_int_s_extend(val.into_int_value(), self.context.i64_type(), "sext_i32_to_i64")?.into()),
+                    LumoraType::I32 => Ok(self
+                        .builder
+                        .build_int_s_extend(
+                            val.into_int_value(),
+                            self.context.i64_type(),
+                            "sext_i32_to_i64",
+                        )?
+                        .into()),
                     LumoraType::I64 => Ok(val),
-                    LumoraType::F64 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i64_type(), "f64_to_i64")?.into()),
-                    LumoraType::F32 => Ok(self.builder.build_float_to_signed_int(val.into_float_value(), self.context.i64_type(), "f32_to_i64")?.into()),
-                    LumoraType::Bool => Ok(self.builder.build_int_z_extend(val.into_int_value(), self.context.i64_type(), "bool_to_i64")?.into()),
+                    LumoraType::F64 => Ok(self
+                        .builder
+                        .build_float_to_signed_int(
+                            val.into_float_value(),
+                            self.context.i64_type(),
+                            "f64_to_i64",
+                        )?
+                        .into()),
+                    LumoraType::F32 => Ok(self
+                        .builder
+                        .build_float_to_signed_int(
+                            val.into_float_value(),
+                            self.context.i64_type(),
+                            "f32_to_i64",
+                        )?
+                        .into()),
+                    LumoraType::Bool => Ok(self
+                        .builder
+                        .build_int_z_extend(
+                            val.into_int_value(),
+                            self.context.i64_type(),
+                            "bool_to_i64",
+                        )?
+                        .into()),
                     LumoraType::String => {
                         let str_val = val.into_pointer_value();
                         let atoll_fn = self.module.get_function("atoll").unwrap_or_else(|| {
-                            let fn_type = self.context.i64_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            let fn_type = self
+                                .context
+                                .i64_type()
+                                .fn_type(&[self.context.ptr_type(0.into()).into()], false);
                             self.module.add_function("atoll", fn_type, None)
                         });
-                        let call_result = self.builder.build_call(atoll_fn, &[str_val.into()], "atoll_call");
+                        let call_result =
+                            self.builder
+                                .build_call(atoll_fn, &[str_val.into()], "atoll_call");
                         Ok(call_result?.try_as_basic_value().left().unwrap())
                     }
                     _ => Err(LumoraError::CodegenError {
@@ -1000,18 +1267,59 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let val = self.generate_expression(expr)?;
                 let expr_type = self.type_of_expression(expr)?;
                 match expr_type {
-                    LumoraType::I32 | LumoraType::I64 => Ok(self.builder.build_int_compare(IntPredicate::NE, val.into_int_value(), val.into_int_value().get_type().const_int(0, false), "int_to_bool")?.into()),
-                    LumoraType::F64 => Ok(self.builder.build_float_compare(inkwell::FloatPredicate::ONE, val.into_float_value(), val.into_float_value().get_type().const_float(0.0), "float_to_bool")?.into()),
-                    LumoraType::F32 => Ok(self.builder.build_float_compare(inkwell::FloatPredicate::ONE, val.into_float_value(), val.into_float_value().get_type().const_float(0.0), "f32_to_bool")?.into()),
+                    LumoraType::I32 | LumoraType::I64 => Ok(self
+                        .builder
+                        .build_int_compare(
+                            IntPredicate::NE,
+                            val.into_int_value(),
+                            val.into_int_value().get_type().const_int(0, false),
+                            "int_to_bool",
+                        )?
+                        .into()),
+                    LumoraType::F64 => Ok(self
+                        .builder
+                        .build_float_compare(
+                            inkwell::FloatPredicate::ONE,
+                            val.into_float_value(),
+                            val.into_float_value().get_type().const_float(0.0),
+                            "float_to_bool",
+                        )?
+                        .into()),
+                    LumoraType::F32 => Ok(self
+                        .builder
+                        .build_float_compare(
+                            inkwell::FloatPredicate::ONE,
+                            val.into_float_value(),
+                            val.into_float_value().get_type().const_float(0.0),
+                            "f32_to_bool",
+                        )?
+                        .into()),
                     LumoraType::Bool => Ok(val),
                     LumoraType::String => {
                         let str_val = val.into_pointer_value();
                         let strlen_fn = self.module.get_function("strlen").unwrap_or_else(|| {
-                            let fn_type = self.context.i64_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            let fn_type = self
+                                .context
+                                .i64_type()
+                                .fn_type(&[self.context.ptr_type(0.into()).into()], false);
                             self.module.add_function("strlen", fn_type, None)
                         });
-                        let call_result = self.builder.build_call(strlen_fn, &[str_val.into()], "strlen_call");
-                        Ok(self.builder.build_int_compare(IntPredicate::NE, call_result?.try_as_basic_value().left().unwrap().into_int_value(), self.context.i64_type().const_int(0, false), "str_to_bool")?.into())
+                        let call_result =
+                            self.builder
+                                .build_call(strlen_fn, &[str_val.into()], "strlen_call");
+                        Ok(self
+                            .builder
+                            .build_int_compare(
+                                IntPredicate::NE,
+                                call_result?
+                                    .try_as_basic_value()
+                                    .left()
+                                    .unwrap()
+                                    .into_int_value(),
+                                self.context.i64_type().const_int(0, false),
+                                "str_to_bool",
+                            )?
+                            .into())
                     }
                     _ => Err(LumoraError::CodegenError {
                         code: "L054".to_string(),
@@ -1025,18 +1333,62 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let val = self.generate_expression(expr)?;
                 let expr_type = self.type_of_expression(expr)?;
                 match expr_type {
-                    LumoraType::I32 => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f32_type(), "i32_to_f32")?.into()),
-                    LumoraType::I64 => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f32_type(), "i64_to_f32")?.into()),
-                    LumoraType::F64 => Ok(self.builder.build_float_trunc(val.into_float_value(), self.context.f32_type(), "f64_to_f32")?.into()),
-                    LumoraType::Bool => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f32_type(), "bool_to_f32")?.into()),
+                    LumoraType::I32 => Ok(self
+                        .builder
+                        .build_signed_int_to_float(
+                            val.into_int_value(),
+                            self.context.f32_type(),
+                            "i32_to_f32",
+                        )?
+                        .into()),
+                    LumoraType::I64 => Ok(self
+                        .builder
+                        .build_signed_int_to_float(
+                            val.into_int_value(),
+                            self.context.f32_type(),
+                            "i64_to_f32",
+                        )?
+                        .into()),
+                    LumoraType::F64 => Ok(self
+                        .builder
+                        .build_float_trunc(
+                            val.into_float_value(),
+                            self.context.f32_type(),
+                            "f64_to_f32",
+                        )?
+                        .into()),
+                    LumoraType::Bool => Ok(self
+                        .builder
+                        .build_signed_int_to_float(
+                            val.into_int_value(),
+                            self.context.f32_type(),
+                            "bool_to_f32",
+                        )?
+                        .into()),
                     LumoraType::String => {
                         let str_val = val.into_pointer_value();
                         let atof_fn = self.module.get_function("atof").unwrap_or_else(|| {
-                            let fn_type = self.context.f64_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            let fn_type = self
+                                .context
+                                .f64_type()
+                                .fn_type(&[self.context.ptr_type(0.into()).into()], false);
                             self.module.add_function("atof", fn_type, None)
                         });
-                        let call_result = self.builder.build_call(atof_fn, &[str_val.into()], "atof_call");
-                        Ok(self.builder.build_float_trunc(call_result?.try_as_basic_value().left().unwrap().into_float_value(), self.context.f32_type(), "f64_to_f32_from_atof")?.into())
+                        let call_result =
+                            self.builder
+                                .build_call(atof_fn, &[str_val.into()], "atof_call");
+                        Ok(self
+                            .builder
+                            .build_float_trunc(
+                                call_result?
+                                    .try_as_basic_value()
+                                    .left()
+                                    .unwrap()
+                                    .into_float_value(),
+                                self.context.f32_type(),
+                                "f64_to_f32_from_atof",
+                            )?
+                            .into())
                     }
                     _ => Err(LumoraError::CodegenError {
                         code: "L055".to_string(),
@@ -1050,17 +1402,43 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let val = self.generate_expression(expr)?;
                 let expr_type = self.type_of_expression(expr)?;
                 match expr_type {
-                    LumoraType::I32 => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f64_type(), "i32_to_f64")?.into()),
-                    LumoraType::I64 => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f64_type(), "i64_to_f64")?.into()),
+                    LumoraType::I32 => Ok(self
+                        .builder
+                        .build_signed_int_to_float(
+                            val.into_int_value(),
+                            self.context.f64_type(),
+                            "i32_to_f64",
+                        )?
+                        .into()),
+                    LumoraType::I64 => Ok(self
+                        .builder
+                        .build_signed_int_to_float(
+                            val.into_int_value(),
+                            self.context.f64_type(),
+                            "i64_to_f64",
+                        )?
+                        .into()),
                     LumoraType::F64 => Ok(val),
-                    LumoraType::Bool => Ok(self.builder.build_signed_int_to_float(val.into_int_value(), self.context.f64_type(), "bool_to_f64")?.into()),
+                    LumoraType::Bool => Ok(self
+                        .builder
+                        .build_signed_int_to_float(
+                            val.into_int_value(),
+                            self.context.f64_type(),
+                            "bool_to_f64",
+                        )?
+                        .into()),
                     LumoraType::String => {
                         let str_val = val.into_pointer_value();
                         let atof_fn = self.module.get_function("atof").unwrap_or_else(|| {
-                            let fn_type = self.context.f64_type().fn_type(&[self.context.ptr_type(0.into()).into()], false);
+                            let fn_type = self
+                                .context
+                                .f64_type()
+                                .fn_type(&[self.context.ptr_type(0.into()).into()], false);
                             self.module.add_function("atof", fn_type, None)
                         });
-                        let call_result = self.builder.build_call(atof_fn, &[str_val.into()], "atof_call");
+                        let call_result =
+                            self.builder
+                                .build_call(atof_fn, &[str_val.into()], "atof_call");
                         Ok(call_result?.try_as_basic_value().left().unwrap())
                     }
                     _ => Err(LumoraError::CodegenError {
