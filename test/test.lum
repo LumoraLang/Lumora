@@ -1,5 +1,5 @@
 use stdlib/io;
 fn main(): i32 {
     println("Hello\e[31m Red Text\e[0m Normal Text");
-    return 0;
+    return assert(false, "h");
 }

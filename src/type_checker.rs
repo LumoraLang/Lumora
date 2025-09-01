@@ -1,4 +1,4 @@
-use crate::ast::{BinaryOp, Expr, Function, LumoraType, Program, Stmt, TopLevelDeclaration};
+use crate::ast::{BinaryOp, Expr, Function, LumoraType, Program, Stmt, TopLevelDeclaration, UnaryOp};
 use crate::errors::{LumoraError, Span};
 use crate::lexer::{Spanned, Token};
 use crate::parser::Parser;
@@ -350,7 +350,34 @@ impl TypeChecker {
                         }
                     }
                 }
-            }
+            },
+            Expr::Unary { op, right } => {
+                let right_type = self.check_expression(right)?;
+                match op {
+                    UnaryOp::Negate => {
+                        match right_type {
+                            LumoraType::I32 | LumoraType::I64 | LumoraType::F32 | LumoraType::F64 => Ok(right_type),
+                            _ => Err(LumoraError::TypeError {
+                                code: "L051".to_string(),
+                                span: None,
+                                message: format!("Unary negation can only be applied to numeric types, found {:?}", right_type),
+                                help: None,
+                            }),
+                        }
+                    }
+                    UnaryOp::Not => {
+                        match right_type {
+                            LumoraType::Bool => Ok(LumoraType::Bool),
+                            _ => Err(LumoraError::TypeError {
+                                code: "L052".to_string(),
+                                span: None,
+                                message: format!("Logical NOT can only be applied to boolean types, found {:?}", right_type),
+                                help: None,
+                            }),
+                        }
+                    }
+                }
+            },
             Expr::Call { name, args } => {
                 if let Some((param_types, return_type)) = self.functions.get(name) {
                     if args.len() != param_types.len() {

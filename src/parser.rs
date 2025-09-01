@@ -1,5 +1,5 @@
 use crate::ast::{
-    BinaryOp, Expr, ExternalFunction, Function, LumoraType, Program, Stmt, TopLevelDeclaration,
+    BinaryOp, Expr, ExternalFunction, Function, LumoraType, Program, Stmt, TopLevelDeclaration, UnaryOp,
 };
 use crate::errors::{LumoraError, Span};
 use crate::lexer::{Spanned, Token};
@@ -543,7 +543,7 @@ impl Parser {
     }
 
     fn parse_multiplication(&mut self) -> Result<Expr, LumoraError> {
-        let mut expr = self.parse_primary()?;
+        let mut expr = self.parse_unary()?;
         while let Some(op) = self.peek().map(|s| s.value.clone()) {
             let binary_op = match op {
                 Token::Multiply => BinaryOp::Mul,
@@ -561,6 +561,26 @@ impl Parser {
         }
 
         Ok(expr)
+    }
+
+    fn parse_unary(&mut self) -> Result<Expr, LumoraError> {
+        if matches!(self.peek().map(|s| &s.value), Some(Token::Minus)) {
+            self.advance();
+            let right = self.parse_unary()?;
+            Ok(Expr::Unary {
+                op: UnaryOp::Negate,
+                right: Box::new(right),
+            })
+        } else if matches!(self.peek().map(|s| &s.value), Some(Token::Bang)) {
+            self.advance();
+            let right = self.parse_unary()?;
+            Ok(Expr::Unary {
+                op: UnaryOp::Not,
+                right: Box::new(right),
+            })
+        } else {
+            self.parse_primary()
+        }
     }
 
     fn parse_primary(&mut self) -> Result<Expr, LumoraError> {

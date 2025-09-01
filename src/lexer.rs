@@ -87,6 +87,8 @@ pub enum Token {
     Plus,
     #[token("-")]
     Minus,
+    #[token("!")]
+    Bang,
     #[token("*")]
     Multiply,
     #[token("/")]

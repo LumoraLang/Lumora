@@ -33,6 +33,10 @@ pub enum Expr {
         op: BinaryOp,
         right: Box<Expr>,
     },
+    Unary {
+        op: UnaryOp,
+        right: Box<Expr>,
+    },
     Call {
         name: String,
         args: Vec<Expr>,
@@ -63,6 +67,12 @@ pub enum BinaryOp {
     NotEqual,
     Less,
     Greater,
+}
+
+#[derive(Debug, Clone)]
+pub enum UnaryOp {
+    Negate,
+    Not,
 }
 
 #[derive(Debug, Clone)]
