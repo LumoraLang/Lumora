@@ -15,6 +15,8 @@ use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue};
 use llvm_sys::core::LLVMBuildLoad2;
 use std::collections::HashMap;
 
+use crate::ast::StructDefinition;
+
 pub struct CodeGenerator<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
@@ -22,6 +24,7 @@ pub struct CodeGenerator<'ctx> {
     variables: HashMap<String, (PointerValue<'ctx>, LumoraType)>,
     functions: HashMap<String, FunctionValue<'ctx>>,
     all_functions: HashMap<String, (Vec<LumoraType>, LumoraType)>,
+    struct_definitions: HashMap<String, StructDefinition>,
     bb_counter: usize,
     args: Vec<String>,
 }
@@ -31,6 +34,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         context: &'ctx Context,
         module_name: &str,
         all_functions: HashMap<String, (Vec<LumoraType>, LumoraType)>,
+        struct_definitions: HashMap<String, StructDefinition>,
         args: Vec<String>,
     ) -> Self {
         let module = context.create_module(module_name);
@@ -52,6 +56,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             variables: HashMap::new(),
             functions: HashMap::new(),
             all_functions,
+            struct_definitions,
             bb_counter: 0,
             args,
         }
@@ -90,6 +95,14 @@ impl<'ctx> CodeGenerator<'ctx> {
                     self.generate_function(function)?;
                 }
                 TopLevelDeclaration::ExternalFunction(_ext_func) => {}
+                TopLevelDeclaration::StructDefinition(struct_def) => {
+                    let struct_type = self.context.opaque_struct_type(&struct_def.name);
+                    let mut field_types = Vec::new();
+                    for (_, field_lumora_type) in &struct_def.fields {
+                        field_types.push(self.type_to_llvm_type(field_lumora_type));
+                    }
+                    struct_type.set_body(&field_types, false);
+                }
             }
         }
 
@@ -132,7 +145,15 @@ impl<'ctx> CodeGenerator<'ctx> {
                     .builder
                     .build_alloca(self.type_to_llvm_type(ty), name)?;
                 let val = self.generate_expression(value)?;
-                self.builder.build_store(alloca, val)?;
+
+                if let LumoraType::Struct(_) = ty {
+                    let struct_llvm_type = self.type_to_llvm_type(ty);
+                    let loaded_struct = self.builder.build_load(struct_llvm_type, val.into_pointer_value(), "load_struct_for_let")?;
+                    self.builder.build_store(alloca, loaded_struct)?;
+                } else {
+                    self.builder.build_store(alloca, val)?;
+                }
+
                 self.variables.insert(name.clone(), (alloca, ty.clone()));
                 Ok(())
             }
@@ -235,19 +256,7 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                     let returned_expr_type = self.type_of_expression(expr)?;
 
-                    let final_val = if returned_expr_type == LumoraType::I64
-                        && function_return_type == LumoraType::I32
-                    {
-                        self.builder
-                            .build_int_truncate(
-                                val.into_int_value(),
-                                self.context.i32_type(),
-                                "trunc_i64_to_i32",
-                            )?
-                            .into()
-                    } else {
-                        val
-                    };
+                    let final_val = self.build_cast(val, &returned_expr_type, &function_return_type)?;
                     let _ = self.builder.build_return(Some(&final_val));
                 } else {
                     let _ = self.builder.build_return(None);
@@ -612,6 +621,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                     }
                     LumoraType::Pointer(_) | LumoraType::NullablePointer(_) => {
                         Ok(unsafe { inkwell::values::PointerValue::new(loaded_value_ref).into() })
+                    }
+                    LumoraType::Struct(_) => {
+                        Ok((*ptr).into())
                     }
                 }
             }
@@ -1638,6 +1650,44 @@ impl<'ctx> CodeGenerator<'ctx> {
                     }),
                 }
             }
+            Expr::StructLiteral { name, fields } => {
+                let struct_type = self.module.get_struct_type(name).unwrap();
+                let struct_alloca = self.builder.build_alloca(struct_type.as_basic_type_enum(), &format!("{}_literal", name))?;
+
+                let struct_def = self.struct_definitions.get(name).unwrap().clone();
+
+                for (i, (field_name, field_expr)) in fields.iter().enumerate() {
+                    let field_val = self.generate_expression(field_expr)?;
+                    let field_lumora_type = &struct_def.fields[i].1;
+                    let casted_field_val = self.build_cast(field_val, &self.type_of_expression(field_expr)?, field_lumora_type)?;
+                    let field_ptr = self.builder.build_struct_gep(struct_type, struct_alloca, i as u32, field_name)?;
+                    self.builder.build_store(field_ptr, casted_field_val)?;
+                }
+                Ok(struct_alloca.into())
+            }
+            Expr::FieldAccess { target, field_name } => {
+                let target_val = self.generate_expression(target)?;
+                let target_type = self.type_of_expression(target)?;
+
+                match target_type {
+                    LumoraType::Struct(struct_name) => {
+                        let struct_type = self.module.get_struct_type(&struct_name).unwrap();
+                        let struct_def = self.struct_definitions.get(&struct_name).unwrap();
+
+                        let field_index = struct_def.fields.iter().position(|(name, _)| name == field_name).unwrap();
+
+                        let field_ptr = self.builder.build_struct_gep(struct_type, target_val.into_pointer_value(), field_index as u32, field_name)?;
+                        let field_lumora_type = &struct_def.fields[field_index].1;
+                        Ok(self.builder.build_load(self.type_to_llvm_type(field_lumora_type), field_ptr, &format!("{}.{}", struct_name, field_name))?.into())
+                    }
+                    _ => Err(LumoraError::CodegenError {
+                        code: "L067".to_string(),
+                        span: None,
+                        message: format!("Cannot access field '{}' on non-struct type {:?}", field_name, target_type),
+                        help: None,
+                    }),
+                }
+            }
             Expr::Unary { op, right } => {
                 let right_val = self.generate_expression(right)?;
                 let right_type = self.type_of_expression(right)?;
@@ -1702,6 +1752,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             LumoraType::Null => self.context.ptr_type(0.into()).into(),
             LumoraType::Pointer(_inner_type) => self.context.ptr_type(0.into()).into(),
             LumoraType::NullablePointer(_inner_type) => self.context.ptr_type(0.into()).into(),
+            LumoraType::Struct(name) => self.module.get_struct_type(name).unwrap().into(),
         }
     }
 
@@ -1825,6 +1876,30 @@ impl<'ctx> CodeGenerator<'ctx> {
             Expr::BoolOf(_) => Ok(LumoraType::Bool),
             Expr::F32Of(_) => Ok(LumoraType::F64),
             Expr::F64Of(_) => Ok(LumoraType::F64),
+            Expr::StructLiteral { name, fields: _ } => Ok(LumoraType::Struct(name.clone())),
+            Expr::FieldAccess { target, field_name } => {
+                let target_type = self.type_of_expression(target)?;
+                match target_type {
+                    LumoraType::Struct(struct_name) => {
+                        let struct_def = self.struct_definitions.get(&struct_name).unwrap();
+                        struct_def.fields.iter()
+                            .find(|(name, _)| name == field_name)
+                            .map(|(_, ty)| ty.clone())
+                            .ok_or_else(|| LumoraError::CodegenError {
+                                code: "L068".to_string(),
+                                span: None,
+                                message: format!("Field '{}' not found in struct '{}'", field_name, struct_name),
+                                help: None,
+                            })
+                    }
+                    _ => Err(LumoraError::CodegenError {
+                        code: "L069".to_string(),
+                        span: None,
+                        message: format!("Cannot access field '{}' on non-struct type {:?}", field_name, target_type),
+                        help: None,
+                    }),
+                }
+            }
             Expr::Unary { op, right } => {
                 let right_type = self.type_of_expression(right)?;
                 match op {
@@ -1851,6 +1926,31 @@ impl<'ctx> CodeGenerator<'ctx> {
                     UnaryOp::AddressOf => Ok(LumoraType::Pointer(Box::new(right_type))),
                 }
             }
+        }
+    }
+
+    fn build_cast(
+        &self,
+        value: BasicValueEnum<'ctx>,
+        from_type: &LumoraType,
+        to_type: &LumoraType,
+    ) -> Result<BasicValueEnum<'ctx>, LumoraError> {
+        if from_type == to_type {
+            return Ok(value);
+        }
+
+        match (from_type, to_type) {
+            (LumoraType::I64, LumoraType::I32) => Ok(self.builder.build_int_truncate(value.into_int_value(), self.context.i32_type(), "trunc_i64_to_i32")?.into()),
+            (LumoraType::I32, LumoraType::I64) => Ok(self.builder.build_int_s_extend(value.into_int_value(), self.context.i64_type(), "sext_i32_to_i64")?.into()),
+            (LumoraType::F32, LumoraType::F64) => Ok(self.builder.build_float_ext(value.into_float_value(), self.context.f64_type(), "f32_to_f64")?.into()),
+            (LumoraType::F64, LumoraType::F32) => Ok(self.builder.build_float_trunc(value.into_float_value(), self.context.f32_type(), "f64_to_f32")?.into()),
+            // Add more casts as needed
+            _ => Err(LumoraError::CodegenError {
+                code: "L070".to_string(),
+                span: None,
+                message: format!("Unsupported cast from {:?} to {:?}", from_type, to_type),
+                help: None,
+            }),
         }
     }
 }

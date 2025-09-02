@@ -1,5 +1,5 @@
 use crate::ast::{
-    BinaryOp, Expr, Function, LumoraType, Program, Stmt, TopLevelDeclaration, UnaryOp,
+    BinaryOp, Expr, Function, LumoraType, Program, Stmt, StructDefinition, TopLevelDeclaration, UnaryOp,
 };
 use crate::errors::{LumoraError, Span};
 use crate::lexer::{Spanned, Token};
@@ -11,6 +11,7 @@ use std::collections::HashMap;
 pub struct TypeChecker {
     variables: HashMap<String, LumoraType>,
     pub functions: HashMap<String, (Vec<LumoraType>, LumoraType)>,
+    pub struct_definitions: HashMap<String, StructDefinition>,
 }
 
 impl TypeChecker {
@@ -18,6 +19,7 @@ impl TypeChecker {
         Self {
             variables: HashMap::new(),
             functions: HashMap::new(),
+            struct_definitions: HashMap::new(),
         }
     }
 
@@ -80,6 +82,31 @@ impl TypeChecker {
                             (param_types, ext_func.return_type.clone()),
                         );
                     }
+                    TopLevelDeclaration::StructDefinition(struct_def) => {
+                        if self.struct_definitions.contains_key(&struct_def.name) {
+                            return Err(LumoraError::TypeError {
+                                code: "L057".to_string(),
+                                span: None,
+                                message: format!("Redefinition of struct '{}'", struct_def.name),
+                                help: None,
+                            });
+                        }
+                        let mut field_names = std::collections::HashSet::new();
+                        for (field_name, _) in &struct_def.fields {
+                            if !field_names.insert(field_name.clone()) {
+                                return Err(LumoraError::TypeError {
+                                    code: "L058".to_string(),
+                                    span: None,
+                                    message: format!(
+                                        "Duplicate field name '{}' in struct '{}'",
+                                        field_name, struct_def.name
+                                    ),
+                                    help: None,
+                                });
+                            }
+                        }
+                        self.struct_definitions.insert(struct_def.name.clone(), struct_def.clone());
+                    }
                 }
             }
         }
@@ -99,6 +126,31 @@ impl TypeChecker {
                         ext_func.name.clone(),
                         (param_types, ext_func.return_type.clone()),
                     );
+                }
+                TopLevelDeclaration::StructDefinition(struct_def) => {
+                    if self.struct_definitions.contains_key(&struct_def.name) {
+                        return Err(LumoraError::TypeError {
+                            code: "L057".to_string(),
+                            span: None,
+                            message: format!("Redefinition of struct '{}'", struct_def.name),
+                            help: None,
+                        });
+                    }
+                    let mut field_names = std::collections::HashSet::new();
+                    for (field_name, _) in &struct_def.fields {
+                        if !field_names.insert(field_name.clone()) {
+                            return Err(LumoraError::TypeError {
+                                code: "L058".to_string(),
+                                span: None,
+                                message: format!(
+                                    "Duplicate field name '{}' in struct '{}'",
+                                    field_name, struct_def.name
+                                ),
+                                help: None,
+                            });
+                        }
+                    }
+                    self.struct_definitions.insert(struct_def.name.clone(), struct_def.clone());
                 }
             }
         }
@@ -690,6 +742,94 @@ impl TypeChecker {
                             help: None,
                         });
                     }
+                }
+            }
+            Expr::StructLiteral { name, fields } => {
+                let struct_def = self.struct_definitions.get(name).ok_or_else(|| LumoraError::TypeError {
+                    code: "L059".to_string(),
+                    span: None,
+                    message: format!("Undefined struct '{}'", name),
+                    help: None,
+                })?;
+
+                let mut provided_fields: HashMap<String, LumoraType> = HashMap::new();
+                for (field_name, expr) in fields {
+                    let expr_type = self.check_expression(expr)?;
+                    if provided_fields.contains_key(field_name) {
+                        return Err(LumoraError::TypeError {
+                            code: "L060".to_string(),
+                            span: None,
+                            message: format!("Duplicate field '{}' in struct literal for '{}'", field_name, name),
+                            help: None,
+                        });
+                    }
+                    provided_fields.insert(field_name.clone(), expr_type);
+                }
+
+                for (def_field_name, def_field_type) in &struct_def.fields {
+                    if let Some(provided_type) = provided_fields.get(def_field_name) {
+                        if provided_type != def_field_type {
+                            return Err(LumoraError::TypeError {
+                                code: "L061".to_string(),
+                                span: None,
+                                message: format!(
+                                    "Type mismatch for field '{}' in struct '{}': expected {:?}, found {:?}",
+                                    def_field_name, name, def_field_type, provided_type
+                                ),
+                                help: None,
+                            });
+                        }
+                    } else {
+                        return Err(LumoraError::TypeError {
+                            code: "L062".to_string(),
+                            span: None,
+                            message: format!("Missing field '{}' in struct literal for '{}'", def_field_name, name),
+                            help: None,
+                        });
+                    }
+                }
+
+                if provided_fields.len() != struct_def.fields.len() {
+                    return Err(LumoraError::TypeError {
+                        code: "L063".to_string(),
+                        span: None,
+                        message: format!(
+                            "Too many fields in struct literal for '{}': expected {}, found {}",
+                            name, struct_def.fields.len(), provided_fields.len()
+                        ),
+                        help: None,
+                    });
+                }
+
+                Ok(LumoraType::Struct(name.clone()))
+            }
+            Expr::FieldAccess { target, field_name } => {
+                let target_type = self.check_expression(target)?;
+                match target_type {
+                    LumoraType::Struct(struct_name) => {
+                        let struct_def = self.struct_definitions.get(&struct_name).ok_or_else(|| LumoraError::TypeError {
+                            code: "L064".to_string(),
+                            span: None,
+                            message: format!("Undefined struct '{}'", struct_name),
+                            help: None,
+                        })?;
+
+                        struct_def.fields.iter()
+                            .find(|(name, _)| name == field_name)
+                            .map(|(_, ty)| ty.clone())
+                            .ok_or_else(|| LumoraError::TypeError {
+                                code: "L065".to_string(),
+                                span: None,
+                                message: format!("Field '{}' not found in struct '{}'", field_name, struct_name),
+                                help: None,
+                            })
+                    }
+                    _ => Err(LumoraError::TypeError {
+                        code: "L066".to_string(),
+                        span: None,
+                        message: format!("Cannot access field '{}' on non-struct type {:?}", field_name, target_type),
+                        help: None,
+                    }),
                 }
             }
         }

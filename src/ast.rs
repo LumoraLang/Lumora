@@ -14,6 +14,7 @@ pub enum LumoraType {
     Pointer(Box<LumoraType>),
     NullablePointer(Box<LumoraType>),
     Null,
+    Struct(String),
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +59,14 @@ pub enum Expr {
     BoolOf(Box<Expr>),
     F32Of(Box<Expr>),
     F64Of(Box<Expr>),
+    StructLiteral {
+        name: String,
+        fields: Vec<(String, Expr)>,
+    },
+    FieldAccess {
+        target: Box<Expr>,
+        field_name: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -118,9 +127,16 @@ pub struct Function {
 }
 
 #[derive(Debug, Clone)]
+pub struct StructDefinition {
+    pub name: String,
+    pub fields: Vec<(String, LumoraType)>,
+}
+
+#[derive(Debug, Clone)]
 pub enum TopLevelDeclaration {
     Function(Function),
     ExternalFunction(ExternalFunction),
+    StructDefinition(StructDefinition),
 }
 
 #[derive(Debug)]
