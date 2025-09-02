@@ -1,6 +1,8 @@
 - [x] ~add argc and argv~  (`arg_count(): i32` and `get_arg(i32/i64): string`)
-- [ ] write and stdlib
+- [x] ~write and stdlib~   (in the works, [here](https://github.com/LumoraLang/stdlib))
 - [ ] write more libs
 - [x] ~dependency manager (even if git)~  (uses git)
 - [x] ~f32 support (probably)~
 - [x] ~type conversions like stringof(), i32of(), i64of(), boolof(), f32of(), f64of()~
+- [ ] fix using nested structs (using, not defining or assigning) causes the compiler to panic
+- [x] pointers and null things

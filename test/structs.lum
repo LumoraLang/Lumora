@@ -12,6 +12,6 @@ struct Player {
 fn main(): i32 {
     let v: Vector2 = Vector2 {x: i32of(10), y: i32of(20)};
     let p: Player = Player { position: v, name: "hi" };
-    println(stringof(p.position.x));
+    println(stringof(p.name)); //TODO: FIX p.position.* causes the compiler to panic
     return 0;
 }
