@@ -14,9 +14,7 @@ use inkwell::values::AsValueRef;
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue};
 use llvm_sys::core::LLVMBuildLoad2;
 use std::collections::HashMap;
-
 use crate::ast::StructDefinition;
-
 pub struct CodeGenerator<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
@@ -1665,7 +1663,17 @@ impl<'ctx> CodeGenerator<'ctx> {
                         i as u32,
                         field_name,
                     )?;
-                    self.builder.build_store(field_ptr, casted_field_val)?;
+                    let value_to_store = if let LumoraType::Struct(_) = field_lumora_type {
+                        let struct_llvm_type = self.type_to_llvm_type(field_lumora_type);
+                        self.builder.build_load(
+                            struct_llvm_type,
+                            casted_field_val.into_pointer_value(),
+                            &format!("load_struct_for_field_{}", field_name),
+                        )?
+                    } else {
+                        casted_field_val
+                    };
+                    self.builder.build_store(field_ptr, value_to_store)?;
                 }
                 Ok(struct_alloca.into())
             }
@@ -1691,14 +1699,18 @@ impl<'ctx> CodeGenerator<'ctx> {
                             field_name,
                         )?;
                         let field_lumora_type = &struct_def.fields[field_index].1;
-                        Ok(self
-                            .builder
-                            .build_load(
-                                self.type_to_llvm_type(field_lumora_type),
-                                field_ptr,
-                                &format!("{}.{}", struct_name, field_name),
-                            )?
-                            .into())
+                        if let LumoraType::Struct(_) = field_lumora_type {
+                            Ok(field_ptr.into())
+                        } else {
+                            Ok(self
+                                .builder
+                                .build_load(
+                                    self.type_to_llvm_type(field_lumora_type),
+                                    field_ptr,
+                                    &format!("{}.{}", struct_name, field_name),
+                                )?
+                                .into())
+                        }
                     }
                     _ => Err(LumoraError::CodegenError {
                         code: "L067".to_string(),

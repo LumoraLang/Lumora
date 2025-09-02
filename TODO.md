@@ -4,5 +4,5 @@
 - [x] ~dependency manager (even if git)~  (uses git)
 - [x] ~f32 support (probably)~
 - [x] ~type conversions like stringof(), i32of(), i64of(), boolof(), f32of(), f64of()~
-- [ ] fix using nested structs (using, not defining or assigning) causes the compiler to panic
+- [x] ~fix using nested structs (using, not defining or assigning) causes the compiler to panic~  (done)
 - [x] pointers and null things
