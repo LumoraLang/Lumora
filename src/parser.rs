@@ -249,6 +249,17 @@ impl Parser {
     }
 
     fn parse_type(&mut self) -> Result<LumoraType, LumoraError> {
+        if matches!(self.peek().map(|s| &s.value), Some(Token::Ampersand)) {
+            self.expect(&Token::Ampersand)?;
+            let inner_type = self.parse_type()?;
+            if matches!(self.peek().map(|s| &s.value), Some(Token::QuestionMark)) {
+                self.expect(&Token::QuestionMark)?;
+                return Ok(LumoraType::NullablePointer(Box::new(inner_type)));
+            } else {
+                return Ok(LumoraType::Pointer(Box::new(inner_type)));
+            }
+        }
+
         let base_type = match self.advance() {
             Some(spanned_token) => match &spanned_token.value {
                 Token::I32Type => Ok(LumoraType::I32),
@@ -577,6 +588,17 @@ impl Parser {
             let right = self.parse_unary()?;
             Ok(Expr::Unary {
                 op: UnaryOp::Not,
+                right: Box::new(right),
+            })
+        } else if matches!(self.peek().map(|s| &s.value), Some(Token::Multiply)) {
+            self.advance();
+            let right = self.parse_unary()?;
+            Ok(Expr::Dereference(Box::new(right)))
+        } else if matches!(self.peek().map(|s| &s.value), Some(Token::Ampersand)) {
+            self.advance();
+            let right = self.parse_unary()?;
+            Ok(Expr::Unary {
+                op: UnaryOp::AddressOf,
                 right: Box::new(right),
             })
         } else {

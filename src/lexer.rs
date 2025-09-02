@@ -57,6 +57,10 @@ pub enum Token {
     False,
     #[token("null")]
     Null,
+    #[token("&")]
+    Ampersand,
+    #[token("?")]
+    QuestionMark,
     #[token("(")]
     LeftParen,
     #[token(")")]

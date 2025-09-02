@@ -329,6 +329,22 @@ impl<'ctx> CodeGenerator<'ctx> {
             Expr::Float(f) => Ok(self.context.f32_type().const_float(*f as f64).into()),
             Expr::Boolean(b) => Ok(self.context.bool_type().const_int(*b as u64, false).into()),
             Expr::Null => Ok(self.context.ptr_type(0.into()).const_null().into()),
+            Expr::Dereference(expr) => {
+                let ptr_val = self.generate_expression(expr)?.into_pointer_value();
+                let expr_type = self.type_of_expression(expr)?;
+                let inner_type = match expr_type {
+                    LumoraType::Pointer(inner) => *inner,
+                    LumoraType::NullablePointer(inner) => *inner,
+                    _ => return Err(LumoraError::CodegenError {
+                        code: "L061".to_string(),
+                        span: None,
+                        message: format!("Attempted to dereference non-pointer type: {:?}", expr_type),
+                        help: None,
+                    }),
+                };
+                let llvm_inner_type = self.type_to_llvm_type(&inner_type);
+                Ok(self.builder.build_load(llvm_inner_type, ptr_val, "deref_load")?.into())
+            },
             Expr::StringLiteral(s) => {
                 if s.is_empty() {
                     Ok(self.context.ptr_type(0.into()).const_null().into())
@@ -385,6 +401,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                         help: None,
                     }),
                     LumoraType::Null => {
+                        Ok(unsafe { inkwell::values::PointerValue::new(loaded_value_ref).into() })
+                    }
+                    LumoraType::Pointer(_) | LumoraType::NullablePointer(_) => {
                         Ok(unsafe { inkwell::values::PointerValue::new(loaded_value_ref).into() })
                     }
                 }
@@ -1484,6 +1503,15 @@ impl<'ctx> CodeGenerator<'ctx> {
                             help: None,
                         }),
                     },
+                    UnaryOp::AddressOf => {
+                        let val = self.generate_expression(right)?;
+                        let val_type = self.type_of_expression(right)?;
+
+                        let alloca = self.builder.build_alloca(self.type_to_llvm_type(&val_type), "temp_addr_of")?;
+                        self.builder.build_store(alloca, val)?;
+
+                        Ok(alloca.into())
+                    }
                 }
             }
         }
@@ -1504,6 +1532,8 @@ impl<'ctx> CodeGenerator<'ctx> {
                 .into_pointer_type()
                 .into(),
             LumoraType::Null => self.context.ptr_type(0.into()).into(),
+            LumoraType::Pointer(_inner_type) => self.context.ptr_type(0.into()).into(),
+            LumoraType::NullablePointer(_inner_type) => self.context.ptr_type(0.into()).into(),
         }
     }
 
@@ -1514,6 +1544,19 @@ impl<'ctx> CodeGenerator<'ctx> {
             Expr::Boolean(_) => Ok(LumoraType::Bool),
             Expr::StringLiteral(_) => Ok(LumoraType::String),
             Expr::Null => Ok(LumoraType::Null),
+            Expr::Dereference(expr) => {
+                let expr_type = self.type_of_expression(expr)?;
+                match expr_type {
+                    LumoraType::Pointer(inner_type) => Ok(*inner_type),
+                    LumoraType::NullablePointer(inner_type) => Ok(*inner_type),
+                    _ => Err(LumoraError::CodegenError {
+                        code: "L062".to_string(),
+                        span: None,
+                        message: format!("Cannot get type of dereferenced non-pointer: {:?}", expr_type),
+                        help: None,
+                    }),
+                }
+            },
             Expr::Identifier(name) => self
                 .variables
                 .get(name)
@@ -1625,6 +1668,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                             help: None,
                         }),
                     },
+                    UnaryOp::AddressOf => Ok(LumoraType::Pointer(Box::new(right_type))),
                 }
             }
         }

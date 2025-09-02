@@ -11,6 +11,8 @@ pub enum LumoraType {
     Void,
     String,
     Array(Box<LumoraType>),
+    Pointer(Box<LumoraType>),
+    NullablePointer(Box<LumoraType>),
     Null,
 }
 
@@ -46,6 +48,7 @@ pub enum Expr {
         array: Box<Expr>,
         index: Box<Expr>,
     },
+    Dereference(Box<Expr>),
     Null,
     ArgCount,
     GetArg(Box<Expr>),
@@ -73,6 +76,7 @@ pub enum BinaryOp {
 pub enum UnaryOp {
     Negate,
     Not,
+    AddressOf,
 }
 
 #[derive(Debug, Clone)]

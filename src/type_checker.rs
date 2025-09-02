@@ -135,56 +135,41 @@ impl TypeChecker {
                 value,
             } => {
                 let value_type = self.check_expression(value)?;
-                if value_type == LumoraType::Null {
-                    if !matches!(*ty, LumoraType::String | LumoraType::Array(_)) {
-                        return Err(LumoraError::TypeError {
-                            code: "L019".to_string(),
-                            span: None,
-                            message: format!(
-                                "Type mismatch: cannot assign null to non-pointer type {:?}",
-                                ty
-                            ),
-                            help: None,
-                        });
+
+                let types_match = match (ty, &value_type) {
+                    (LumoraType::NullablePointer(_), LumoraType::Null) => true,
+                    (LumoraType::Pointer(expected_inner), LumoraType::Pointer(found_inner)) => {
+                        expected_inner == found_inner
                     }
-                } else if *ty != value_type {
-                    if *ty == LumoraType::I32 && value_type == LumoraType::I64 {
+                    (LumoraType::NullablePointer(expected_inner),
+                     LumoraType::NullablePointer(found_inner)) => {
+                        expected_inner == found_inner
+                    }
+                    (LumoraType::NullablePointer(expected_inner), LumoraType::Pointer(found_inner)) => {
+                        expected_inner == found_inner
+                    }
+                    (LumoraType::I32, LumoraType::I64) => {
                         if let Expr::Integer(n) = value {
-                            if *n >= i32::MIN as i64 && *n <= i32::MAX as i64 {
-                            } else {
-                                return Err(LumoraError::TypeError {
-                                    code: "L019".to_string(),
-                                    span: None,
-                                    message: format!(
-                                        "Type mismatch: I66 value {} out of range for I32",
-                                        n
-                                    ),
-                                    help: None,
-                                });
-                            }
+                            *n >= i32::MIN as i64 && *n <= i32::MAX as i64
                         } else {
-                            return Err(LumoraError::TypeError {
-                                code: "L019".to_string(),
-                                span: None,
-                                message: format!(
-                                    "Type mismatch: expected {:?}, found {:?}",
-                                    ty, value_type
-                                ),
-                                help: None,
-                            });
+                            false
                         }
-                    } else if *ty == LumoraType::F64 && value_type == LumoraType::F32 {
-                    } else {
-                        return Err(LumoraError::TypeError {
-                            code: "L019".to_string(),
-                            span: None,
-                            message: format!(
-                                "Type mismatch: expected {:?}, found {:?}",
-                                ty, value_type
-                            ),
-                            help: None,
-                        });
                     }
+                    (LumoraType::F64, LumoraType::F32) => true,
+                    (expected, found) => expected == found,
+                };
+
+                if !types_match {
+                    return Err(LumoraError::TypeError {
+                        code: "L019".to_string(),
+                        span: None,
+                        message: format!(
+                            "Type mismatch: expected {:?}, found {:?}",
+                            ty,
+                            value_type
+                        ),
+                        help: None,
+                    });
                 }
                 self.variables.insert(name.clone(), ty.clone());
                 Ok(())
@@ -272,6 +257,24 @@ impl TypeChecker {
             Expr::Boolean(_) => Ok(LumoraType::Bool),
             Expr::StringLiteral(_) => Ok(LumoraType::String),
             Expr::Null => Ok(LumoraType::Null),
+            Expr::Dereference(expr) => {
+                let expr_type = self.check_expression(expr)?;
+                match expr_type {
+                    LumoraType::Pointer(inner_type) => Ok(*inner_type),
+                    LumoraType::NullablePointer(_) => Err(LumoraError::TypeError {
+                        code: "L053".to_string(),
+                        span: None,
+                        message: "Cannot dereference a nullable pointer directly. Check for null first.".to_string(),
+                        help: Some("Consider using an 'if' statement to check if the pointer is null before dereferencing.".to_string()),
+                    }),
+                    _ => Err(LumoraError::TypeError {
+                        code: "L054".to_string(),
+                        span: None,
+                        message: format!("Cannot dereference non-pointer type {:?}", expr_type),
+                        help: None,
+                    }),
+                }
+            }
             Expr::Identifier(name) => {
                 self.variables
                     .get(name)
@@ -332,21 +335,43 @@ impl TypeChecker {
                             }),
                         }
                     }
-                    BinaryOp::Equal | BinaryOp::NotEqual | BinaryOp::Less | BinaryOp::Greater => {
-                        if left_type == right_type
-                            || left_type == LumoraType::Null
-                            || right_type == LumoraType::Null
-                        {
+                    BinaryOp::Equal | BinaryOp::NotEqual => {
+                        let compatible = match (&left_type, &right_type) {
+                            (LumoraType::Null, LumoraType::Null) => true,
+                            (LumoraType::Null, LumoraType::NullablePointer(_)) => true,
+                            (LumoraType::NullablePointer(_), LumoraType::Null) => true,
+                            (LumoraType::Pointer(l_inner), LumoraType::Pointer(r_inner)) => l_inner == r_inner,
+                            (LumoraType::NullablePointer(l_inner), LumoraType::NullablePointer(r_inner)) => l_inner == r_inner,
+                            (LumoraType::I32, LumoraType::I64) | (LumoraType::I64, LumoraType::I32) => true,
+                            (l, r) => l == r,
+                        };
+                        if compatible {
                             Ok(LumoraType::Bool)
-                        } else if (left_type == LumoraType::I32 && right_type == LumoraType::I64)
+                        } else {
+                            Err(LumoraError::TypeError {
+                                code: "L023".to_string(),
+                                span: None,
+                                message: format!("Comparison requires compatible types, found {:?} and {:?}", left_type, right_type),
+                                help: None,
+                            })
+                        }
+                    }
+                    BinaryOp::Less | BinaryOp::Greater => {
+                        if (left_type == LumoraType::I32 && right_type == LumoraType::I32)
+                            || (left_type == LumoraType::I64 && right_type == LumoraType::I64)
+                            || (left_type == LumoraType::F32 && right_type == LumoraType::F32)
+                            || (left_type == LumoraType::F64 && right_type == LumoraType::F64)
+                            || (left_type == LumoraType::I32 && right_type == LumoraType::I64)
                             || (left_type == LumoraType::I64 && right_type == LumoraType::I32)
+                            || (left_type == LumoraType::F32 && right_type == LumoraType::F64)
+                            || (left_type == LumoraType::F64 && right_type == LumoraType::F32)
                         {
                             Ok(LumoraType::Bool)
                         } else {
                             Err(LumoraError::TypeError {
                                 code: "L023".to_string(),
                                 span: None,
-                                message: "Comparison requires compatible types".to_string(),
+                                message: format!("Comparison (less/greater) requires numeric types, found {:?} and {:?}", left_type, right_type),
                                 help: None,
                             })
                         }
@@ -382,6 +407,7 @@ impl TypeChecker {
                             help: None,
                         }),
                     },
+                    UnaryOp::AddressOf => Ok(LumoraType::Pointer(Box::new(right_type))),
                 }
             }
             Expr::Call { name, args } => {

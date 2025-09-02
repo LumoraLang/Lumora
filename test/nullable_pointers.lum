@@ -1,0 +1,18 @@
+use stdlib/io;
+fn main(): i32 {
+    let p: &i32? = null; // should be allowed
+    let q: &i64 = &10; // non-nullable pointer
+    let r: &i64? = q; // pointer to nullable pointer (safe)
+    // Type error: Cannot assign nullable to non-nullable
+    // let s: &i32 = p;
+    // Type error: Cannot dereference nullable pointer directly
+    // println(*p);
+    println(stringof(*q));
+    if p == null {
+        println("p is null");
+    } else {
+        println("p is not null");
+    }
+
+    return 0;
+}
