@@ -1,6 +1,6 @@
 use crate::ast::{
-    BinaryOp, Expr, ExternalFunction, Function, LumoraType, Program, Stmt, StructDefinition, TopLevelDeclaration,
-    UnaryOp,
+    BinaryOp, Expr, ExternalFunction, Function, LumoraType, Program, Stmt, StructDefinition,
+    TopLevelDeclaration, UnaryOp,
 };
 use crate::errors::{LumoraError, Span};
 use crate::lexer::{Spanned, Token};
@@ -723,10 +723,11 @@ impl Parser {
                         let mut fields = Vec::new();
                         while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBrace)) {
                             let field_name = match self.advance() {
-                                Some(spanned_token) => match &spanned_token.value {
-                                    Token::Identifier(f_name) => f_name.clone(),
-                                    _ => {
-                                        return Err(LumoraError::ParseError {
+                                Some(spanned_token) => {
+                                    match &spanned_token.value {
+                                        Token::Identifier(f_name) => f_name.clone(),
+                                        _ => {
+                                            return Err(LumoraError::ParseError {
                                             code: "L035".to_string(),
                                             span: Some(Span::new(
                                                 spanned_token.span.clone(),
@@ -736,8 +737,9 @@ impl Parser {
                                             message: "Expected field name (identifier) in struct literal".to_string(),
                                             help: None,
                                         });
+                                        }
                                     }
-                                },
+                                }
                                 None => {
                                     return Err(LumoraError::ParseError {
                                         code: "L035".to_string(),

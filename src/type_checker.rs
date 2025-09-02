@@ -1,5 +1,6 @@
 use crate::ast::{
-    BinaryOp, Expr, Function, LumoraType, Program, Stmt, StructDefinition, TopLevelDeclaration, UnaryOp,
+    BinaryOp, Expr, Function, LumoraType, Program, Stmt, StructDefinition, TopLevelDeclaration,
+    UnaryOp,
 };
 use crate::errors::{LumoraError, Span};
 use crate::lexer::{Spanned, Token};
@@ -105,7 +106,8 @@ impl TypeChecker {
                                 });
                             }
                         }
-                        self.struct_definitions.insert(struct_def.name.clone(), struct_def.clone());
+                        self.struct_definitions
+                            .insert(struct_def.name.clone(), struct_def.clone());
                     }
                 }
             }
@@ -150,7 +152,8 @@ impl TypeChecker {
                             });
                         }
                     }
-                    self.struct_definitions.insert(struct_def.name.clone(), struct_def.clone());
+                    self.struct_definitions
+                        .insert(struct_def.name.clone(), struct_def.clone());
                 }
             }
         }
@@ -193,13 +196,14 @@ impl TypeChecker {
                     (LumoraType::Pointer(expected_inner), LumoraType::Pointer(found_inner)) => {
                         expected_inner == found_inner
                     }
-                    (LumoraType::NullablePointer(expected_inner),
-                     LumoraType::NullablePointer(found_inner)) => {
-                        expected_inner == found_inner
-                    }
-                    (LumoraType::NullablePointer(expected_inner), LumoraType::Pointer(found_inner)) => {
-                        expected_inner == found_inner
-                    }
+                    (
+                        LumoraType::NullablePointer(expected_inner),
+                        LumoraType::NullablePointer(found_inner),
+                    ) => expected_inner == found_inner,
+                    (
+                        LumoraType::NullablePointer(expected_inner),
+                        LumoraType::Pointer(found_inner),
+                    ) => expected_inner == found_inner,
                     (LumoraType::I32, LumoraType::I64) => {
                         if let Expr::Integer(n) = value {
                             *n >= i32::MIN as i64 && *n <= i32::MAX as i64
@@ -217,8 +221,7 @@ impl TypeChecker {
                         span: None,
                         message: format!(
                             "Type mismatch: expected {:?}, found {:?}",
-                            ty,
-                            value_type
+                            ty, value_type
                         ),
                         help: None,
                     });
@@ -745,12 +748,15 @@ impl TypeChecker {
                 }
             }
             Expr::StructLiteral { name, fields } => {
-                let struct_def = self.struct_definitions.get(name).ok_or_else(|| LumoraError::TypeError {
-                    code: "L059".to_string(),
-                    span: None,
-                    message: format!("Undefined struct '{}'", name),
-                    help: None,
-                })?;
+                let struct_def =
+                    self.struct_definitions
+                        .get(name)
+                        .ok_or_else(|| LumoraError::TypeError {
+                            code: "L059".to_string(),
+                            span: None,
+                            message: format!("Undefined struct '{}'", name),
+                            help: None,
+                        })?;
 
                 let mut provided_fields: HashMap<String, LumoraType> = HashMap::new();
                 for (field_name, expr) in fields {
@@ -759,7 +765,10 @@ impl TypeChecker {
                         return Err(LumoraError::TypeError {
                             code: "L060".to_string(),
                             span: None,
-                            message: format!("Duplicate field '{}' in struct literal for '{}'", field_name, name),
+                            message: format!(
+                                "Duplicate field '{}' in struct literal for '{}'",
+                                field_name, name
+                            ),
                             help: None,
                         });
                     }
@@ -783,7 +792,10 @@ impl TypeChecker {
                         return Err(LumoraError::TypeError {
                             code: "L062".to_string(),
                             span: None,
-                            message: format!("Missing field '{}' in struct literal for '{}'", def_field_name, name),
+                            message: format!(
+                                "Missing field '{}' in struct literal for '{}'",
+                                def_field_name, name
+                            ),
                             help: None,
                         });
                     }
@@ -795,7 +807,9 @@ impl TypeChecker {
                         span: None,
                         message: format!(
                             "Too many fields in struct literal for '{}': expected {}, found {}",
-                            name, struct_def.fields.len(), provided_fields.len()
+                            name,
+                            struct_def.fields.len(),
+                            provided_fields.len()
                         ),
                         help: None,
                     });
@@ -807,27 +821,38 @@ impl TypeChecker {
                 let target_type = self.check_expression(target)?;
                 match target_type {
                     LumoraType::Struct(struct_name) => {
-                        let struct_def = self.struct_definitions.get(&struct_name).ok_or_else(|| LumoraError::TypeError {
-                            code: "L064".to_string(),
-                            span: None,
-                            message: format!("Undefined struct '{}'", struct_name),
-                            help: None,
-                        })?;
+                        let struct_def =
+                            self.struct_definitions.get(&struct_name).ok_or_else(|| {
+                                LumoraError::TypeError {
+                                    code: "L064".to_string(),
+                                    span: None,
+                                    message: format!("Undefined struct '{}'", struct_name),
+                                    help: None,
+                                }
+                            })?;
 
-                        struct_def.fields.iter()
+                        struct_def
+                            .fields
+                            .iter()
                             .find(|(name, _)| name == field_name)
                             .map(|(_, ty)| ty.clone())
                             .ok_or_else(|| LumoraError::TypeError {
                                 code: "L065".to_string(),
                                 span: None,
-                                message: format!("Field '{}' not found in struct '{}'", field_name, struct_name),
+                                message: format!(
+                                    "Field '{}' not found in struct '{}'",
+                                    field_name, struct_name
+                                ),
                                 help: None,
                             })
                     }
                     _ => Err(LumoraError::TypeError {
                         code: "L066".to_string(),
                         span: None,
-                        message: format!("Cannot access field '{}' on non-struct type {:?}", field_name, target_type),
+                        message: format!(
+                            "Cannot access field '{}' on non-struct type {:?}",
+                            field_name, target_type
+                        ),
                         help: None,
                     }),
                 }

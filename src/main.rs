@@ -1,5 +1,5 @@
-use glob::glob;
 use clap::Parser;
+use glob::glob;
 use logos::Logos;
 use lumora::compile_lumora;
 use lumora::config::{OutputType, load_config};
@@ -371,7 +371,8 @@ fn run() -> Result<(), LumoraError> {
 
             if let Some(ext) = dep_path_buf.extension() {
                 if ext == "c" || ext == "cpp" {
-                    let obj_file = output_dir.join(dep_path_buf.with_extension("o").file_name().unwrap());
+                    let obj_file =
+                        output_dir.join(dep_path_buf.with_extension("o").file_name().unwrap());
                     let mut clang_compile_command = Command::new("clang");
                     clang_compile_command
                         .arg("-c")
@@ -417,7 +418,9 @@ fn run() -> Result<(), LumoraError> {
                                     "Failed to execute clang for external dependency: {}",
                                     e
                                 ),
-                                help: Some("Ensure clang is installed and in your PATH.".to_string()),
+                                help: Some(
+                                    "Ensure clang is installed and in your PATH.".to_string(),
+                                ),
                             })?;
                     if !compile_output.status.success() {
                         eprintln!(

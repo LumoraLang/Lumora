@@ -148,7 +148,11 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                 if let LumoraType::Struct(_) = ty {
                     let struct_llvm_type = self.type_to_llvm_type(ty);
-                    let loaded_struct = self.builder.build_load(struct_llvm_type, val.into_pointer_value(), "load_struct_for_let")?;
+                    let loaded_struct = self.builder.build_load(
+                        struct_llvm_type,
+                        val.into_pointer_value(),
+                        "load_struct_for_let",
+                    )?;
                     self.builder.build_store(alloca, loaded_struct)?;
                 } else {
                     self.builder.build_store(alloca, val)?;
@@ -256,7 +260,8 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                     let returned_expr_type = self.type_of_expression(expr)?;
 
-                    let final_val = self.build_cast(val, &returned_expr_type, &function_return_type)?;
+                    let final_val =
+                        self.build_cast(val, &returned_expr_type, &function_return_type)?;
                     let _ = self.builder.build_return(Some(&final_val));
                 } else {
                     let _ = self.builder.build_return(None);
@@ -344,8 +349,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         let i64_type = self.context.i64_type();
         match op {
             BinaryOp::Add => {
-                if left_lumora_type == LumoraType::String
-                    && right_lumora_type == LumoraType::String
+                if left_lumora_type == LumoraType::String && right_lumora_type == LumoraType::String
                 {
                     let strlen_fn = self.module.get_function("strlen").unwrap();
                     let strcpy_fn = self.module.get_function("strcpy").unwrap();
@@ -367,9 +371,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                         .left()
                         .unwrap()
                         .into_int_value();
-                    let total_len =
-                        self.builder
-                            .build_int_add(left_len, right_len, "total_len")?;
+                    let total_len = self
+                        .builder
+                        .build_int_add(left_len, right_len, "total_len")?;
                     let total_len_plus_null = self.builder.build_int_add(
                         total_len,
                         i64_type.const_int(1, false),
@@ -377,11 +381,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     )?;
                     let new_str_ptr = self
                         .builder
-                        .build_call(
-                            malloc_fn,
-                            &[total_len_plus_null.into()],
-                            "new_str_ptr",
-                        )?
+                        .build_call(malloc_fn, &[total_len_plus_null.into()], "new_str_ptr")?
                         .try_as_basic_value()
                         .left()
                         .unwrap()
@@ -401,12 +401,11 @@ impl<'ctx> CodeGenerator<'ctx> {
                     return Err(LumoraError::CodegenError {
                         code: "L030".to_string(),
                         span: None,
-                        message: "String addition requires both operands to be strings"
-                            .to_string(),
+                        message: "String addition requires both operands to be strings".to_string(),
                         help: None,
                     });
                 }
-            },
+            }
             BinaryOp::NullCoalescing => {
                 return Err(LumoraError::CodegenError {
                     code: "L057".to_string(),
@@ -432,8 +431,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     .left()
                     .unwrap()
                     .into_int_value();
-                let total_len =
-                    self.builder.build_int_mul(str_len, int_val, "total_len")?;
+                let total_len = self.builder.build_int_mul(str_len, int_val, "total_len")?;
                 let total_len_plus_null = self.builder.build_int_add(
                     total_len,
                     i64_type.const_int(1, false),
@@ -441,19 +439,13 @@ impl<'ctx> CodeGenerator<'ctx> {
                 )?;
                 let new_str_ptr = self
                     .builder
-                    .build_call(
-                        malloc_fn,
-                        &[total_len_plus_null.into()],
-                        "new_str_ptr",
-                    )?
+                    .build_call(malloc_fn, &[total_len_plus_null.into()], "new_str_ptr")?
                     .try_as_basic_value()
                     .left()
                     .unwrap()
                     .into_pointer_value();
-                self.builder.build_store(
-                    new_str_ptr,
-                    self.context.i8_type().const_int(0, false),
-                )?;
+                self.builder
+                    .build_store(new_str_ptr, self.context.i8_type().const_int(0, false))?;
                 let loop_bb = self.context.append_basic_block(
                     self.builder
                         .get_insert_block()
@@ -470,8 +462,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                         .unwrap(),
                     "after_loop_bb",
                 );
-                let counter_alloca =
-                    self.builder.build_alloca(i64_type, "counter_alloca")?;
+                let counter_alloca = self.builder.build_alloca(i64_type, "counter_alloca")?;
                 self.builder
                     .build_store(counter_alloca, i64_type.const_int(0, false))?;
                 self.builder.build_unconditional_branch(loop_bb)?;
@@ -491,11 +482,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     {
                         let current_pos_ptr = self
                             .builder
-                            .build_call(
-                                strlen_fn,
-                                &[new_str_ptr.into()],
-                                "current_pos_ptr",
-                            )?
+                            .build_call(strlen_fn, &[new_str_ptr.into()], "current_pos_ptr")?
                             .try_as_basic_value()
                             .left()
                             .unwrap()
@@ -551,16 +538,24 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let inner_type = match expr_type {
                     LumoraType::Pointer(inner) => *inner,
                     LumoraType::NullablePointer(inner) => *inner,
-                    _ => return Err(LumoraError::CodegenError {
-                        code: "L061".to_string(),
-                        span: None,
-                        message: format!("Attempted to dereference non-pointer type: {:?}", expr_type),
-                        help: None,
-                    }),
+                    _ => {
+                        return Err(LumoraError::CodegenError {
+                            code: "L061".to_string(),
+                            span: None,
+                            message: format!(
+                                "Attempted to dereference non-pointer type: {:?}",
+                                expr_type
+                            ),
+                            help: None,
+                        });
+                    }
                 };
                 let llvm_inner_type = self.type_to_llvm_type(&inner_type);
-                Ok(self.builder.build_load(llvm_inner_type, ptr_val, "deref_load")?.into())
-            },
+                Ok(self
+                    .builder
+                    .build_load(llvm_inner_type, ptr_val, "deref_load")?
+                    .into())
+            }
             Expr::StringLiteral(s) => {
                 if s.is_empty() {
                     Ok(self.context.ptr_type(0.into()).const_null().into())
@@ -622,9 +617,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     LumoraType::Pointer(_) | LumoraType::NullablePointer(_) => {
                         Ok(unsafe { inkwell::values::PointerValue::new(loaded_value_ref).into() })
                     }
-                    LumoraType::Struct(_) => {
-                        Ok((*ptr).into())
-                    }
+                    LumoraType::Struct(_) => Ok((*ptr).into()),
                 }
             }
             Expr::Binary { left, op, right } => {
@@ -657,10 +650,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                     let is_not_null_bb = self.context.append_basic_block(fn_val, "is_not_null");
                     let merge_bb = self.context.append_basic_block(fn_val, "merge");
 
-                    let is_null_cond = self.builder.build_is_null(
-                        left_val.into_pointer_value(),
-                        "is_null_cond",
-                    )?;
+                    let is_null_cond = self
+                        .builder
+                        .build_is_null(left_val.into_pointer_value(), "is_null_cond")?;
 
                     self.builder.build_conditional_branch(
                         is_null_cond,
@@ -682,16 +674,16 @@ impl<'ctx> CodeGenerator<'ctx> {
                     self.builder.build_unconditional_branch(merge_bb)?;
 
                     self.builder.position_at_end(merge_bb);
-                    let phi = self.builder.build_phi(
-                        self.type_to_llvm_type(&inner_type),
-                        "null_coalescing_phi",
-                    )?;
+                    let phi = self
+                        .builder
+                        .build_phi(self.type_to_llvm_type(&inner_type), "null_coalescing_phi")?;
                     phi.add_incoming(&[
                         (&left_val_not_null, is_not_null_bb),
                         (&right_val_is_null, is_null_bb),
                     ]);
                     Ok(phi.as_basic_value())
-                } else if left_lumora_type == LumoraType::String || right_lumora_type == LumoraType::String
+                } else if left_lumora_type == LumoraType::String
+                    || right_lumora_type == LumoraType::String
                 {
                     self.generate_string_binary_op(
                         left_val,
@@ -749,13 +741,13 @@ impl<'ctx> CodeGenerator<'ctx> {
                                 .unwrap();
 
                             let is_null_bb = self.context.append_basic_block(fn_val, "is_null");
-                            let is_not_null_bb = self.context.append_basic_block(fn_val, "is_not_null");
+                            let is_not_null_bb =
+                                self.context.append_basic_block(fn_val, "is_not_null");
                             let merge_bb = self.context.append_basic_block(fn_val, "merge");
 
-                            let is_null_cond = self.builder.build_is_null(
-                                left_val.into_pointer_value(),
-                                "is_null_cond",
-                            )?;
+                            let is_null_cond = self
+                                .builder
+                                .build_is_null(left_val.into_pointer_value(), "is_null_cond")?;
 
                             self.builder.build_conditional_branch(
                                 is_null_cond,
@@ -781,7 +773,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                                 (&right_val_is_null, is_null_bb),
                             ]);
                             Ok(phi.as_basic_value())
-                        },
+                        }
                         BinaryOp::NotEqual => Ok(self
                             .builder
                             .build_int_compare(IntPredicate::NE, left_int_val, right_int_val, "ne")?
@@ -884,13 +876,13 @@ impl<'ctx> CodeGenerator<'ctx> {
                                 .unwrap();
 
                             let is_null_bb = self.context.append_basic_block(fn_val, "is_null");
-                            let is_not_null_bb = self.context.append_basic_block(fn_val, "is_not_null");
+                            let is_not_null_bb =
+                                self.context.append_basic_block(fn_val, "is_not_null");
                             let merge_bb = self.context.append_basic_block(fn_val, "merge");
 
-                            let is_null_cond = self.builder.build_is_null(
-                                left_val.into_pointer_value(),
-                                "is_null_cond",
-                            )?;
+                            let is_null_cond = self
+                                .builder
+                                .build_is_null(left_val.into_pointer_value(), "is_null_cond")?;
 
                             self.builder.build_conditional_branch(
                                 is_null_cond,
@@ -1652,15 +1644,27 @@ impl<'ctx> CodeGenerator<'ctx> {
             }
             Expr::StructLiteral { name, fields } => {
                 let struct_type = self.module.get_struct_type(name).unwrap();
-                let struct_alloca = self.builder.build_alloca(struct_type.as_basic_type_enum(), &format!("{}_literal", name))?;
+                let struct_alloca = self.builder.build_alloca(
+                    struct_type.as_basic_type_enum(),
+                    &format!("{}_literal", name),
+                )?;
 
                 let struct_def = self.struct_definitions.get(name).unwrap().clone();
 
                 for (i, (field_name, field_expr)) in fields.iter().enumerate() {
                     let field_val = self.generate_expression(field_expr)?;
                     let field_lumora_type = &struct_def.fields[i].1;
-                    let casted_field_val = self.build_cast(field_val, &self.type_of_expression(field_expr)?, field_lumora_type)?;
-                    let field_ptr = self.builder.build_struct_gep(struct_type, struct_alloca, i as u32, field_name)?;
+                    let casted_field_val = self.build_cast(
+                        field_val,
+                        &self.type_of_expression(field_expr)?,
+                        field_lumora_type,
+                    )?;
+                    let field_ptr = self.builder.build_struct_gep(
+                        struct_type,
+                        struct_alloca,
+                        i as u32,
+                        field_name,
+                    )?;
                     self.builder.build_store(field_ptr, casted_field_val)?;
                 }
                 Ok(struct_alloca.into())
@@ -1674,16 +1678,35 @@ impl<'ctx> CodeGenerator<'ctx> {
                         let struct_type = self.module.get_struct_type(&struct_name).unwrap();
                         let struct_def = self.struct_definitions.get(&struct_name).unwrap();
 
-                        let field_index = struct_def.fields.iter().position(|(name, _)| name == field_name).unwrap();
+                        let field_index = struct_def
+                            .fields
+                            .iter()
+                            .position(|(name, _)| name == field_name)
+                            .unwrap();
 
-                        let field_ptr = self.builder.build_struct_gep(struct_type, target_val.into_pointer_value(), field_index as u32, field_name)?;
+                        let field_ptr = self.builder.build_struct_gep(
+                            struct_type,
+                            target_val.into_pointer_value(),
+                            field_index as u32,
+                            field_name,
+                        )?;
                         let field_lumora_type = &struct_def.fields[field_index].1;
-                        Ok(self.builder.build_load(self.type_to_llvm_type(field_lumora_type), field_ptr, &format!("{}.{}", struct_name, field_name))?.into())
+                        Ok(self
+                            .builder
+                            .build_load(
+                                self.type_to_llvm_type(field_lumora_type),
+                                field_ptr,
+                                &format!("{}.{}", struct_name, field_name),
+                            )?
+                            .into())
                     }
                     _ => Err(LumoraError::CodegenError {
                         code: "L067".to_string(),
                         span: None,
-                        message: format!("Cannot access field '{}' on non-struct type {:?}", field_name, target_type),
+                        message: format!(
+                            "Cannot access field '{}' on non-struct type {:?}",
+                            field_name, target_type
+                        ),
                         help: None,
                     }),
                 }
@@ -1725,7 +1748,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                         let val = self.generate_expression(right)?;
                         let val_type = self.type_of_expression(right)?;
 
-                        let alloca = self.builder.build_alloca(self.type_to_llvm_type(&val_type), "temp_addr_of")?;
+                        let alloca = self
+                            .builder
+                            .build_alloca(self.type_to_llvm_type(&val_type), "temp_addr_of")?;
                         self.builder.build_store(alloca, val)?;
 
                         Ok(alloca.into())
@@ -1771,11 +1796,14 @@ impl<'ctx> CodeGenerator<'ctx> {
                     _ => Err(LumoraError::CodegenError {
                         code: "L062".to_string(),
                         span: None,
-                        message: format!("Cannot get type of dereferenced non-pointer: {:?}", expr_type),
+                        message: format!(
+                            "Cannot get type of dereferenced non-pointer: {:?}",
+                            expr_type
+                        ),
                         help: None,
                     }),
                 }
-            },
+            }
             Expr::Identifier(name) => self
                 .variables
                 .get(name)
@@ -1882,20 +1910,28 @@ impl<'ctx> CodeGenerator<'ctx> {
                 match target_type {
                     LumoraType::Struct(struct_name) => {
                         let struct_def = self.struct_definitions.get(&struct_name).unwrap();
-                        struct_def.fields.iter()
+                        struct_def
+                            .fields
+                            .iter()
                             .find(|(name, _)| name == field_name)
                             .map(|(_, ty)| ty.clone())
                             .ok_or_else(|| LumoraError::CodegenError {
                                 code: "L068".to_string(),
                                 span: None,
-                                message: format!("Field '{}' not found in struct '{}'", field_name, struct_name),
+                                message: format!(
+                                    "Field '{}' not found in struct '{}'",
+                                    field_name, struct_name
+                                ),
                                 help: None,
                             })
                     }
                     _ => Err(LumoraError::CodegenError {
                         code: "L069".to_string(),
                         span: None,
-                        message: format!("Cannot access field '{}' on non-struct type {:?}", field_name, target_type),
+                        message: format!(
+                            "Cannot access field '{}' on non-struct type {:?}",
+                            field_name, target_type
+                        ),
                         help: None,
                     }),
                 }
@@ -1940,11 +1976,38 @@ impl<'ctx> CodeGenerator<'ctx> {
         }
 
         match (from_type, to_type) {
-            (LumoraType::I64, LumoraType::I32) => Ok(self.builder.build_int_truncate(value.into_int_value(), self.context.i32_type(), "trunc_i64_to_i32")?.into()),
-            (LumoraType::I32, LumoraType::I64) => Ok(self.builder.build_int_s_extend(value.into_int_value(), self.context.i64_type(), "sext_i32_to_i64")?.into()),
-            (LumoraType::F32, LumoraType::F64) => Ok(self.builder.build_float_ext(value.into_float_value(), self.context.f64_type(), "f32_to_f64")?.into()),
-            (LumoraType::F64, LumoraType::F32) => Ok(self.builder.build_float_trunc(value.into_float_value(), self.context.f32_type(), "f64_to_f32")?.into()),
-            // Add more casts as needed
+            (LumoraType::I64, LumoraType::I32) => Ok(self
+                .builder
+                .build_int_truncate(
+                    value.into_int_value(),
+                    self.context.i32_type(),
+                    "trunc_i64_to_i32",
+                )?
+                .into()),
+            (LumoraType::I32, LumoraType::I64) => Ok(self
+                .builder
+                .build_int_s_extend(
+                    value.into_int_value(),
+                    self.context.i64_type(),
+                    "sext_i32_to_i64",
+                )?
+                .into()),
+            (LumoraType::F32, LumoraType::F64) => Ok(self
+                .builder
+                .build_float_ext(
+                    value.into_float_value(),
+                    self.context.f64_type(),
+                    "f32_to_f64",
+                )?
+                .into()),
+            (LumoraType::F64, LumoraType::F32) => Ok(self
+                .builder
+                .build_float_trunc(
+                    value.into_float_value(),
+                    self.context.f32_type(),
+                    "f64_to_f32",
+                )?
+                .into()),
             _ => Err(LumoraError::CodegenError {
                 code: "L070".to_string(),
                 span: None,

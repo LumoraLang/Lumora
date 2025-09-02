@@ -314,8 +314,14 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
     };
 
     config.dependencies.push(new_dependency);
-    let c_files_glob = target_path.join("native/**/*.c").to_string_lossy().into_owned();
-    let o_files_glob = target_path.join("native/**/*.o").to_string_lossy().into_owned();
+    let c_files_glob = target_path
+        .join("native/**/*.c")
+        .to_string_lossy()
+        .into_owned();
+    let o_files_glob = target_path
+        .join("native/**/*.o")
+        .to_string_lossy()
+        .into_owned();
     config.external_dependencies.push(c_files_glob);
     config.external_dependencies.push(o_files_glob);
     let config_content =
@@ -443,11 +449,17 @@ fn remove_dependency(name: String, user: bool, global: bool) -> Result<(), Lumor
     config
         .dependencies
         .retain(|dep| dep.name != name || dep.path != target_path.to_string_lossy().into_owned());
-    let c_files_glob_to_remove = target_path.join("native/**/*.c").to_string_lossy().into_owned();
-    let o_files_glob_to_remove = target_path.join("native/**/*.o").to_string_lossy().into_owned();
-    config.external_dependencies.retain(|path| {
-        path != &c_files_glob_to_remove && path != &o_files_glob_to_remove
-    });
+    let c_files_glob_to_remove = target_path
+        .join("native/**/*.c")
+        .to_string_lossy()
+        .into_owned();
+    let o_files_glob_to_remove = target_path
+        .join("native/**/*.o")
+        .to_string_lossy()
+        .into_owned();
+    config
+        .external_dependencies
+        .retain(|path| path != &c_files_glob_to_remove && path != &o_files_glob_to_remove);
 
     if config.dependencies.len() == initial_len {
         eprintln!(
@@ -480,10 +492,13 @@ fn install_nested_dependencies(
         return Ok(());
     }
 
-    let canonical_repo_path = repo_path.canonicalize().map_err(|e| LumoraError::ConfigurationError {
-        message: format!("Failed to canonicalize path {}: {}", repo_path.display(), e),
-        help: None,
-    })?;
+    let canonical_repo_path =
+        repo_path
+            .canonicalize()
+            .map_err(|e| LumoraError::ConfigurationError {
+                message: format!("Failed to canonicalize path {}: {}", repo_path.display(), e),
+                help: None,
+            })?;
 
     if visited.contains(&canonical_repo_path) {
         return Err(LumoraError::ConfigurationError {
