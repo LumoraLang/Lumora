@@ -133,7 +133,6 @@ fn print_dir_contents(dir: &Path) -> Result<(), LumoraError> {
         .collect();
 
     entries.sort_by_key(|entry| entry.file_name());
-
     if entries.is_empty() {
         println!("  (No dependencies found)");
     } else {
