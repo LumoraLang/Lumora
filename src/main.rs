@@ -1,3 +1,4 @@
+use glob::glob;
 use clap::Parser;
 use logos::Logos;
 use lumora::compile_lumora;
@@ -358,87 +359,97 @@ fn run() -> Result<(), LumoraError> {
     }
 
     let mut external_object_files = Vec::new();
-    for dep in &config.external_dependencies {
-        if let Some(ext) = dep.extension() {
-            if ext == "c" || ext == "cpp" {
-                let obj_file = output_dir.join(dep.with_extension("o").file_name().unwrap());
-                let mut clang_compile_command = Command::new("clang");
-                clang_compile_command
-                    .arg("-c")
-                    .arg(dep)
-                    .arg("-o")
-                    .arg(&obj_file);
+    for dep_pattern in &config.external_dependencies {
+        for entry in glob(dep_pattern).map_err(|e| LumoraError::ConfigurationError {
+            message: format!("Invalid glob pattern '{}': {}", dep_pattern, e),
+            help: None,
+        })? {
+            let dep_path_buf = entry.map_err(|e| LumoraError::ConfigurationError {
+                message: format!("Error reading glob entry: {}", e),
+                help: None,
+            })?;
 
-                let effective_optimization_level = cli.optimize.as_ref().or_else(|| {
-                    if config.build_settings.optimization_level.is_empty() {
-                        None
-                    } else {
-                        Some(&config.build_settings.optimization_level)
-                    }
-                });
-
-                if let Some(opt_level) = effective_optimization_level {
-                    clang_compile_command.arg(format!("-{}", opt_level));
-                }
-
-                if cli.debug || config.build_settings.debug_info {
-                    clang_compile_command.arg("-g");
-                }
-
-                let effective_target_triple = cli.target.as_ref().or_else(|| {
-                    if config.build_settings.target_triple.is_empty() {
-                        None
-                    } else {
-                        Some(&config.build_settings.target_triple)
-                    }
-                });
-
-                if let Some(target_triple) = effective_target_triple {
-                    clang_compile_command.arg(format!("-target={}", target_triple));
-                }
-                clang_compile_command.arg("-fPIE");
-                let compile_output =
+            if let Some(ext) = dep_path_buf.extension() {
+                if ext == "c" || ext == "cpp" {
+                    let obj_file = output_dir.join(dep_path_buf.with_extension("o").file_name().unwrap());
+                    let mut clang_compile_command = Command::new("clang");
                     clang_compile_command
-                        .output()
-                        .map_err(|e| LumoraError::CodegenError {
-                            code: "L009".to_string(),
-                            span: None,
-                            message: format!(
-                                "Failed to execute clang for external dependency: {}",
-                                e
-                            ),
-                            help: Some("Ensure clang is installed and in your PATH.".to_string()),
-                        })?;
-                if !compile_output.status.success() {
-                    eprintln!(
-                        "clang compilation of {} failed: {}",
-                        dep.display(),
-                        String::from_utf8_lossy(&compile_output.stderr)
-                    );
-                    return Err(LumoraError::CodegenError {
-                        code: "L005".to_string(),
-                        span: None,
-                        message: "External C/C++ compilation failed".to_string(),
-                        help: Some(format!(
-                            "Check the output from clang: {}",
-                            String::from_utf8_lossy(&compile_output.stderr)
-                        )),
+                        .arg("-c")
+                        .arg(&dep_path_buf)
+                        .arg("-o")
+                        .arg(&obj_file);
+
+                    let effective_optimization_level = cli.optimize.as_ref().or_else(|| {
+                        if config.build_settings.optimization_level.is_empty() {
+                            None
+                        } else {
+                            Some(&config.build_settings.optimization_level)
+                        }
                     });
+
+                    if let Some(opt_level) = effective_optimization_level {
+                        clang_compile_command.arg(format!("-{}", opt_level));
+                    }
+
+                    if cli.debug || config.build_settings.debug_info {
+                        clang_compile_command.arg("-g");
+                    }
+
+                    let effective_target_triple = cli.target.as_ref().or_else(|| {
+                        if config.build_settings.target_triple.is_empty() {
+                            None
+                        } else {
+                            Some(&config.build_settings.target_triple)
+                        }
+                    });
+
+                    if let Some(target_triple) = effective_target_triple {
+                        clang_compile_command.arg(format!("-target={}", target_triple));
+                    }
+                    clang_compile_command.arg("-fPIE");
+                    let compile_output =
+                        clang_compile_command
+                            .output()
+                            .map_err(|e| LumoraError::CodegenError {
+                                code: "L009".to_string(),
+                                span: None,
+                                message: format!(
+                                    "Failed to execute clang for external dependency: {}",
+                                    e
+                                ),
+                                help: Some("Ensure clang is installed and in your PATH.".to_string()),
+                            })?;
+                    if !compile_output.status.success() {
+                        eprintln!(
+                            "clang compilation of {} failed: {}",
+                            dep_path_buf.display(),
+                            String::from_utf8_lossy(&compile_output.stderr)
+                        );
+                        return Err(LumoraError::CodegenError {
+                            code: "L005".to_string(),
+                            span: None,
+                            message: "External C/C++ compilation failed".to_string(),
+                            help: Some(format!(
+                                "Check the output from clang: {}",
+                                String::from_utf8_lossy(&compile_output.stderr)
+                            )),
+                        });
+                    }
+                    external_object_files.push(obj_file);
+                } else if ext == "o" || ext == "a" {
+                    external_object_files.push(dep_path_buf.clone());
+                } else {
+                    eprintln!(
+                        "Warning: Unsupported external dependency type: {}",
+                        dep_path_buf.display()
+                    );
                 }
-                external_object_files.push(obj_file);
-            } else if ext == "o" || ext == "a" {
-                external_object_files.push(dep.clone());
             } else {
                 eprintln!(
-                    "Warning: Unsupported external dependency type: {}",
-                    dep.display()
+                    "Warning: External dependency has no extension: {}",
+                    dep_path_buf.display()
                 );
             }
-        } else {
-            eprintln!(
-                "Warning: External dependency has no extension: {}",
-                dep.display()
-            );
         }
     }
 

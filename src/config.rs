@@ -105,7 +105,7 @@ pub struct LumoraConfig {
     #[serde(default)]
     pub source_files: Vec<String>,
     #[serde(default)]
-    pub external_dependencies: Vec<PathBuf>,
+    pub external_dependencies: Vec<String>,
     #[serde(default)]
     pub linker_settings: LinkerSettings,
     #[serde(default)]
@@ -118,7 +118,7 @@ pub struct LumoraConfig {
 pub struct Dependency {
     pub name: String,
     pub source: String,
-    pub path: PathBuf,
+    pub path: String,
     pub version: String,
 }
 

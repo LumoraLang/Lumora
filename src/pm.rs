@@ -177,7 +177,6 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
     let (source_str, repo_name) = parse_repository_string(&repository)?;
     let install_dir = get_install_dir(user, global)?;
     let target_path = install_dir.join(&repo_name);
-
     if target_path.exists() {
         return Err(LumoraError::ConfigurationError {
             message: format!(
@@ -205,7 +204,6 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
             target_path.display()
         ));
         pb.enable_steady_tick(Duration::from_millis(100));
-
         let output = Command::new("cp")
             .arg("-r")
             .arg(&source_path)
@@ -217,7 +215,6 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
             })?;
 
         pb.finish_and_clear();
-
         if !output.status.success() {
             return Err(LumoraError::ConfigurationError {
                 message: format!(
@@ -241,7 +238,6 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
             target_path.display()
         ));
         pb.enable_steady_tick(Duration::from_millis(100));
-
         let output = Command::new("git")
             .arg("clone")
             .arg(&source_str)
@@ -253,7 +249,6 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
             })?;
 
         pb.finish_and_clear();
-
         if !output.status.success() {
             return Err(LumoraError::ConfigurationError {
                 message: format!(
@@ -268,7 +263,6 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
         pb.set_style(spinner_style.clone());
         pb.set_message(format!("Updating submodules for {}...", repo_name));
         pb.enable_steady_tick(Duration::from_millis(100));
-
         let output = Command::new("git")
             .arg("submodule")
             .arg("update")
@@ -282,7 +276,6 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
             })?;
 
         pb.finish_and_clear();
-
         if !output.status.success() {
             eprintln!(
                 "Warning: Git submodule update failed for {}: {}",
@@ -317,11 +310,15 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
     let new_dependency = Dependency {
         name: repo_name.clone(),
         source: repository,
-        path: target_path.clone(),
+        path: target_path.to_string_lossy().into_owned(),
         version,
     };
 
     config.dependencies.push(new_dependency);
+    let c_files_glob = target_path.join("native/**/*.c").to_string_lossy().into_owned();
+    let o_files_glob = target_path.join("native/**/*.o").to_string_lossy().into_owned();
+    config.external_dependencies.push(c_files_glob);
+    config.external_dependencies.push(o_files_glob);
     let config_content =
         serde_yaml::to_string(&config).map_err(|e| LumoraError::ConfigurationError {
             message: format!("Failed to serialize config to YAML: {}", e),
@@ -334,9 +331,7 @@ fn add_dependency(repository: String, user: bool, global: bool) -> Result<(), Lu
     })?;
 
     let mut visited: HashSet<PathBuf> = HashSet::new();
-    visited.insert(target_path.clone());
     install_nested_dependencies(&target_path, &mut visited, "  ")?;
-
     Ok(())
 }
 
@@ -448,7 +443,13 @@ fn remove_dependency(name: String, user: bool, global: bool) -> Result<(), Lumor
     let initial_len = config.dependencies.len();
     config
         .dependencies
-        .retain(|dep| dep.name != name || dep.path != target_path);
+        .retain(|dep| dep.name != name || dep.path != target_path.to_string_lossy().into_owned());
+    let c_files_glob_to_remove = target_path.join("native/**/*.c").to_string_lossy().into_owned();
+    let o_files_glob_to_remove = target_path.join("native/**/*.o").to_string_lossy().into_owned();
+    config.external_dependencies.retain(|path| {
+        path != &c_files_glob_to_remove && path != &o_files_glob_to_remove
+    });
+
     if config.dependencies.len() == initial_len {
         eprintln!(
             "Warning: Dependency '{}' not found in lumora.yaml. Only removed from filesystem.",
@@ -480,7 +481,12 @@ fn install_nested_dependencies(
         return Ok(());
     }
 
-    if visited.contains(repo_path) {
+    let canonical_repo_path = repo_path.canonicalize().map_err(|e| LumoraError::ConfigurationError {
+        message: format!("Failed to canonicalize path {}: {}", repo_path.display(), e),
+        help: None,
+    })?;
+
+    if visited.contains(&canonical_repo_path) {
         return Err(LumoraError::ConfigurationError {
             message: format!("Circular dependency detected: {}", repo_path.display()),
             help: Some(
@@ -489,8 +495,7 @@ fn install_nested_dependencies(
             ),
         });
     }
-    visited.insert(repo_path.to_path_buf());
-
+    visited.insert(canonical_repo_path.clone());
     println!(
         "{}{}Found nested lumora.yaml in {}. Installing its dependencies...",
         indent,
@@ -509,7 +514,6 @@ fn install_nested_dependencies(
     })?;
 
     let next_indent = format!("{}  ", indent);
-
     let spinner_style = ProgressStyle::with_template("{spinner:.green} {msg}")
         .unwrap()
         .tick_chars(r"-\/ ");
@@ -522,7 +526,6 @@ fn install_nested_dependencies(
             next_indent, next_indent, dep.name, dep.source
         ));
         pb.enable_steady_tick(Duration::from_millis(100));
-
         let parent_lumora_dir = repo_path.join(".lumora");
         fs::create_dir_all(&parent_lumora_dir).map_err(|e| LumoraError::ConfigurationError {
             message: format!(
@@ -535,7 +538,6 @@ fn install_nested_dependencies(
 
         let (repo_url, repo_name) = parse_repository_string(&dep.source)?;
         let target_path = parent_lumora_dir.join(&repo_name);
-
         if dep.source.starts_with("dir:") {
             pb.finish_and_clear();
             println!(
@@ -557,7 +559,6 @@ fn install_nested_dependencies(
                 })?;
 
             pb.finish_and_clear();
-
             if !output.status.success() {
                 eprintln!(
                     "{}{}Warning: Git pull failed for {}: {}",
@@ -586,7 +587,6 @@ fn install_nested_dependencies(
                 })?;
 
             pb.finish_and_clear();
-
             if !output.status.success() {
                 return Err(LumoraError::ConfigurationError {
                     message: format!(
@@ -609,7 +609,6 @@ fn install_nested_dependencies(
                 next_indent, next_indent, dep.name
             ));
             pb_sub.enable_steady_tick(Duration::from_millis(100));
-
             let output = Command::new("git")
                 .arg("submodule")
                 .arg("update")
@@ -626,7 +625,6 @@ fn install_nested_dependencies(
                 })?;
 
             pb_sub.finish_and_clear();
-
             if !output.status.success() {
                 eprintln!(
                     "{}{}Warning: Git submodule update failed for {}: {}",
@@ -641,20 +639,18 @@ fn install_nested_dependencies(
         install_nested_dependencies(&target_path, visited, &next_indent)?;
     }
 
-    visited.remove(repo_path);
+    visited.remove(&canonical_repo_path);
     Ok(())
 }
 
 fn install_dependencies_from_config() -> Result<(), LumoraError> {
     let config = load_config("lumora.yaml").unwrap_or_default();
-
     if config.dependencies.is_empty() {
         println!("No dependencies found in lumora.yaml.");
         return Ok(());
     }
 
     let mut visited: HashSet<PathBuf> = HashSet::new();
-
     let spinner_style = ProgressStyle::with_template("{spinner:.green} {msg}")
         .unwrap()
         .tick_chars(r"-\/ ");
@@ -667,25 +663,23 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
             dep.name, dep.source
         ));
         pb.enable_steady_tick(Duration::from_millis(100));
-
-        let target_path = dep.path;
+        let target_path_buf = PathBuf::from(&dep.path);
         let repo_url = parse_repository_string(&dep.source)?.0;
-
         if dep.source.starts_with("dir:") {
             pb.finish_and_clear();
             println!(
                 "Skipping git operations for local dependency '{}'.",
                 dep.name
             );
-        } else if target_path.exists() {
+        } else if target_path_buf.exists() {
             pb.set_message(format!(
                 "Dependency '{}' already exists at {}. Pulling latest changes...",
                 dep.name,
-                target_path.display()
+                target_path_buf.display()
             ));
             let output = Command::new("git")
                 .arg("pull")
-                .current_dir(&target_path)
+                .current_dir(&target_path_buf)
                 .output()
                 .map_err(|e| LumoraError::ConfigurationError {
                     message: format!("Failed to execute git pull for {}: {}", dep.name, e),
@@ -693,7 +687,6 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
                 })?;
 
             pb.finish_and_clear();
-
             if !output.status.success() {
                 eprintln!(
                     "Warning: Git pull failed for {}: {}",
@@ -705,12 +698,12 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
             pb.set_message(format!(
                 "Cloning {} into {}...",
                 repo_url,
-                target_path.display()
+                target_path_buf.display()
             ));
             let output = Command::new("git")
                 .arg("clone")
                 .arg(&repo_url)
-                .arg(&target_path)
+                .arg(&target_path_buf)
                 .output()
                 .map_err(|e| LumoraError::ConfigurationError {
                     message: format!("Failed to execute git clone for {}: {}", dep.name, e),
@@ -718,7 +711,6 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
                 })?;
 
             pb.finish_and_clear();
-
             if !output.status.success() {
                 return Err(LumoraError::ConfigurationError {
                     message: format!(
@@ -736,13 +728,12 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
             pb_sub.set_style(spinner_style.clone());
             pb_sub.set_message(format!("Updating submodules for {}...", dep.name));
             pb_sub.enable_steady_tick(Duration::from_millis(100));
-
             let output = Command::new("git")
                 .arg("submodule")
                 .arg("update")
                 .arg("--init")
                 .arg("--recursive")
-                .current_dir(&target_path)
+                .current_dir(&target_path_buf)
                 .output()
                 .map_err(|e| LumoraError::ConfigurationError {
                     message: format!(
@@ -753,7 +744,6 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
                 })?;
 
             pb_sub.finish_and_clear();
-
             if !output.status.success() {
                 eprintln!(
                     "Warning: Git submodule update failed for {}: {}",
@@ -763,7 +753,7 @@ fn install_dependencies_from_config() -> Result<(), LumoraError> {
             }
         }
 
-        install_nested_dependencies(&target_path, &mut visited, "  ")?;
+        install_nested_dependencies(&target_path_buf, &mut visited, "  ")?;
     }
 
     println!("All dependencies installed.");

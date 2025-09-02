@@ -1,27 +1,27 @@
-project_name: Test
+project_name: default_lumora_project
 version: 0.1.0
-authors:
-- NEOAPPS <asd22.info@gmail.com>
-description: A test project for Lumora.
+authors: []
+description: A Lumora project.
 build_settings:
   output_dir: build
-  optimization_level: O2
-  debug_info: false
+  optimization_level: O0
+  debug_info: true
   target_triple: ''
   output_type: Executable
-source_files: []
-external_dependencies: []
+source_files:
+- src/**/*.lum
+- test.lum
+external_dependencies:
+- .lumora/stdlib/native/**/*.c
+- .lumora/stdlib/native/**/*.o
 linker_settings:
-  libraries:
-  - m
-  - raylib
-  flags:
-  - -L/usr/local/lib
+  libraries: []
+  flags: []
 test_settings:
   run_tests_on_build: true
   test_dir: tests
 dependencies:
 - name: stdlib
-  source: dir:../stdlib
+  source: LumoraLang/stdlib
   path: .lumora/stdlib
-  version: unknown
+  version: 16deae2ec75ea6807a3f8b15c3afcd857eba2b88
