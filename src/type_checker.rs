@@ -13,14 +13,31 @@ pub struct TypeChecker {
     variables: HashMap<String, LumoraType>,
     pub functions: HashMap<String, (Vec<LumoraType>, LumoraType)>,
     pub struct_definitions: HashMap<String, StructDefinition>,
+    pub enum_definitions: HashMap<String, Vec<String>>,
 }
 
 impl TypeChecker {
+    fn resolve_type(&self, type_name: &str) -> LumoraType {
+        if self.enum_definitions.contains_key(type_name) {
+            LumoraType::Enum(type_name.to_string())
+        } else {
+            LumoraType::Struct(type_name.to_string())
+        }
+    }
+
+    fn resolve_lumora_type(&self, ty: &LumoraType) -> LumoraType {
+        match ty {
+            LumoraType::Struct(name) => self.resolve_type(name),
+            _ => ty.clone(),
+        }
+    }
+
     pub fn new() -> Self {
         Self {
             variables: HashMap::new(),
             functions: HashMap::new(),
             struct_definitions: HashMap::new(),
+            enum_definitions: HashMap::new(),
         }
     }
 
@@ -61,19 +78,26 @@ impl TypeChecker {
                 imported_source.clone(),
             );
             let imported_program = parser.parse()?;
-            let mut imported_type_checker = TypeChecker::new();
+            let mut imported_type_checker = TypeChecker {
+                variables: HashMap::new(),
+                functions: HashMap::new(),
+                struct_definitions: HashMap::new(),
+                enum_definitions: HashMap::new(),
+            };
             imported_type_checker.check_program(&imported_program)?;
 
             for declaration in &imported_program.declarations {
                 match declaration {
                     TopLevelDeclaration::Function(function) => {
                         if function.is_exported {
-                            let param_types =
-                                function.params.iter().map(|(_, ty)| ty.clone()).collect();
-                            self.functions.insert(
-                                function.name.clone(),
-                                (param_types, function.return_type.clone()),
-                            );
+                            let param_types = function
+                                .params
+                                .iter()
+                                .map(|(_, ty)| self.resolve_lumora_type(ty))
+                                .collect();
+                            let return_type = self.resolve_lumora_type(&function.return_type);
+                            self.functions
+                                .insert(function.name.clone(), (param_types, return_type));
                         }
                     }
                     TopLevelDeclaration::ExternalFunction(ext_func) => {
@@ -109,6 +133,32 @@ impl TypeChecker {
                         self.struct_definitions
                             .insert(struct_def.name.clone(), struct_def.clone());
                     }
+                    TopLevelDeclaration::EnumDefinition(enum_def) => {
+                        if self.enum_definitions.contains_key(&enum_def.name) {
+                            return Err(LumoraError::TypeError {
+                                code: "L073".to_string(),
+                                span: None,
+                                message: format!("Redefinition of enum '{}'", enum_def.name),
+                                help: None,
+                            });
+                        }
+                        let mut variant_names = std::collections::HashSet::new();
+                        for variant_name in &enum_def.variants {
+                            if !variant_names.insert(variant_name.clone()) {
+                                return Err(LumoraError::TypeError {
+                                    code: "L074".to_string(),
+                                    span: None,
+                                    message: format!(
+                                        "Duplicate variant name '{}' in enum '{}'",
+                                        variant_name, enum_def.name
+                                    ),
+                                    help: None,
+                                });
+                            }
+                        }
+                        self.enum_definitions
+                            .insert(enum_def.name.clone(), enum_def.variants.clone());
+                    }
                 }
             }
         }
@@ -116,11 +166,14 @@ impl TypeChecker {
         for declaration in &program.declarations {
             match declaration {
                 TopLevelDeclaration::Function(function) => {
-                    let param_types = function.params.iter().map(|(_, ty)| ty.clone()).collect();
-                    self.functions.insert(
-                        function.name.clone(),
-                        (param_types, function.return_type.clone()),
-                    );
+                    let param_types = function
+                        .params
+                        .iter()
+                        .map(|(_, ty)| self.resolve_lumora_type(ty))
+                        .collect();
+                    let return_type = self.resolve_lumora_type(&function.return_type);
+                    self.functions
+                        .insert(function.name.clone(), (param_types, return_type));
                 }
                 TopLevelDeclaration::ExternalFunction(ext_func) => {
                     let param_types = ext_func.params.clone();
@@ -155,6 +208,32 @@ impl TypeChecker {
                     self.struct_definitions
                         .insert(struct_def.name.clone(), struct_def.clone());
                 }
+                TopLevelDeclaration::EnumDefinition(enum_def) => {
+                    if self.enum_definitions.contains_key(&enum_def.name) {
+                        return Err(LumoraError::TypeError {
+                            code: "L073".to_string(),
+                            span: None,
+                            message: format!("Redefinition of enum '{}'", enum_def.name),
+                            help: None,
+                        });
+                    }
+                    let mut variant_names = std::collections::HashSet::new();
+                    for variant_name in &enum_def.variants {
+                        if !variant_names.insert(variant_name.clone()) {
+                            return Err(LumoraError::TypeError {
+                                code: "L074".to_string(),
+                                span: None,
+                                message: format!(
+                                    "Duplicate variant name '{}' in enum '{}'",
+                                    variant_name, enum_def.name
+                                ),
+                                help: None,
+                            });
+                        }
+                    }
+                    self.enum_definitions
+                        .insert(enum_def.name.clone(), enum_def.variants.clone());
+                }
             }
         }
 
@@ -171,7 +250,8 @@ impl TypeChecker {
         self.variables.clear();
 
         for (name, ty) in &function.params {
-            self.variables.insert(name.clone(), ty.clone());
+            let resolved_ty = self.resolve_lumora_type(ty);
+            self.variables.insert(name.clone(), resolved_ty);
         }
 
         for stmt in &function.body {
@@ -189,9 +269,10 @@ impl TypeChecker {
                 ty,
                 value,
             } => {
+                let resolved_ty = self.resolve_lumora_type(ty);
                 let value_type = self.check_expression(value)?;
 
-                let types_match = match (ty, &value_type) {
+                let types_match = match (&resolved_ty, &value_type) {
                     (LumoraType::NullablePointer(_), LumoraType::Null) => true,
                     (LumoraType::Pointer(expected_inner), LumoraType::Pointer(found_inner)) => {
                         expected_inner == found_inner
@@ -212,6 +293,18 @@ impl TypeChecker {
                         }
                     }
                     (LumoraType::F64, LumoraType::F32) => true,
+                    (LumoraType::Struct(expected_name), LumoraType::Enum(found_name)) => {
+                        expected_name == found_name
+                    }
+                    (LumoraType::Enum(expected_name), LumoraType::Struct(found_name)) => {
+                        expected_name == found_name
+                    }
+                    (LumoraType::Enum(expected_name), LumoraType::Enum(found_name)) => {
+                        expected_name == found_name
+                    }
+                    (LumoraType::Struct(expected_name), LumoraType::Struct(found_name)) => {
+                        expected_name == found_name
+                    }
                     (expected, found) => expected == found,
                 };
 
@@ -221,12 +314,12 @@ impl TypeChecker {
                         span: None,
                         message: format!(
                             "Type mismatch: expected {:?}, found {:?}",
-                            ty, value_type
+                            resolved_ty, value_type
                         ),
                         help: None,
                     });
                 }
-                self.variables.insert(name.clone(), ty.clone());
+                self.variables.insert(name.clone(), resolved_ty);
                 Ok(())
             }
             Stmt::If {
@@ -398,6 +491,8 @@ impl TypeChecker {
                             (LumoraType::Pointer(l_inner), LumoraType::Pointer(r_inner)) => l_inner == r_inner,
                             (LumoraType::NullablePointer(l_inner), LumoraType::NullablePointer(r_inner)) => l_inner == r_inner,
                             (LumoraType::I32, LumoraType::I64) | (LumoraType::I64, LumoraType::I32) => true,
+                            (LumoraType::Struct(l_name), LumoraType::Enum(r_name)) => l_name == r_name,
+                            (LumoraType::Enum(l_name), LumoraType::Struct(r_name)) => l_name == r_name,
                             (l, r) => l == r,
                         };
                         if compatible {
@@ -855,6 +950,33 @@ impl TypeChecker {
                         ),
                         help: None,
                     }),
+                }
+            }
+            Expr::EnumVariant {
+                enum_name,
+                variant_name,
+            } => {
+                if let Some(variants) = self.enum_definitions.get(enum_name) {
+                    if variants.contains(variant_name) {
+                        Ok(LumoraType::Enum(enum_name.clone()))
+                    } else {
+                        Err(LumoraError::TypeError {
+                            code: "L075".to_string(),
+                            span: None,
+                            message: format!(
+                                "Variant '{}' not found in enum '{}'",
+                                variant_name, enum_name
+                            ),
+                            help: None,
+                        })
+                    }
+                } else {
+                    Err(LumoraError::TypeError {
+                        code: "L076".to_string(),
+                        span: None,
+                        message: format!("Undefined enum '{}'", enum_name),
+                        help: None,
+                    })
                 }
             }
         }

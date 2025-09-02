@@ -1,4 +1,5 @@
 extern crate libc;
+use crate::ast::StructDefinition;
 use crate::ast::{
     BinaryOp, Expr, Function, LumoraType, Program, Stmt, TopLevelDeclaration, UnaryOp,
 };
@@ -14,7 +15,6 @@ use inkwell::values::AsValueRef;
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue};
 use llvm_sys::core::LLVMBuildLoad2;
 use std::collections::HashMap;
-use crate::ast::StructDefinition;
 pub struct CodeGenerator<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
@@ -23,6 +23,7 @@ pub struct CodeGenerator<'ctx> {
     functions: HashMap<String, FunctionValue<'ctx>>,
     all_functions: HashMap<String, (Vec<LumoraType>, LumoraType)>,
     struct_definitions: HashMap<String, StructDefinition>,
+    enum_definitions: HashMap<String, Vec<String>>,
     bb_counter: usize,
     args: Vec<String>,
 }
@@ -33,6 +34,7 @@ impl<'ctx> CodeGenerator<'ctx> {
         module_name: &str,
         all_functions: HashMap<String, (Vec<LumoraType>, LumoraType)>,
         struct_definitions: HashMap<String, StructDefinition>,
+        enum_definitions: HashMap<String, Vec<String>>,
         args: Vec<String>,
     ) -> Self {
         let module = context.create_module(module_name);
@@ -55,6 +57,7 @@ impl<'ctx> CodeGenerator<'ctx> {
             functions: HashMap::new(),
             all_functions,
             struct_definitions,
+            enum_definitions,
             bb_counter: 0,
             args,
         }
@@ -101,6 +104,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     }
                     struct_type.set_body(&field_types, false);
                 }
+                TopLevelDeclaration::EnumDefinition(_) => {}
             }
         }
 
@@ -139,13 +143,14 @@ impl<'ctx> CodeGenerator<'ctx> {
                 ty,
                 value,
             } => {
+                let resolved_ty = self.resolve_lumora_type(ty);
                 let alloca = self
                     .builder
-                    .build_alloca(self.type_to_llvm_type(ty), name)?;
+                    .build_alloca(self.type_to_llvm_type(&resolved_ty), name)?;
                 let val = self.generate_expression(value)?;
 
-                if let LumoraType::Struct(_) = ty {
-                    let struct_llvm_type = self.type_to_llvm_type(ty);
+                if let LumoraType::Struct(_) = resolved_ty {
+                    let struct_llvm_type = self.type_to_llvm_type(&resolved_ty);
                     let loaded_struct = self.builder.build_load(
                         struct_llvm_type,
                         val.into_pointer_value(),
@@ -156,7 +161,7 @@ impl<'ctx> CodeGenerator<'ctx> {
                     self.builder.build_store(alloca, val)?;
                 }
 
-                self.variables.insert(name.clone(), (alloca, ty.clone()));
+                self.variables.insert(name.clone(), (alloca, resolved_ty));
                 Ok(())
             }
             Stmt::If {
@@ -180,6 +185,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let else_bb = self
                     .context
                     .append_basic_block(fn_val, &format!("else{}", current_bb_id));
+                let cont_bb = self
+                    .context
+                    .append_basic_block(fn_val, &format!("cont{}", current_bb_id));
 
                 let _ = self.builder.build_conditional_branch(
                     cond_val.into_int_value(),
@@ -191,53 +199,31 @@ impl<'ctx> CodeGenerator<'ctx> {
                 for stmt in then_block {
                     self.generate_statement(stmt)?;
                 }
-                let then_block_terminated = self
+                if !self
                     .builder
                     .get_insert_block()
                     .unwrap()
                     .get_terminator()
-                    .is_some();
-
+                    .is_some()
+                {
+                    let _ = self.builder.build_unconditional_branch(cont_bb);
+                }
                 self.builder.position_at_end(else_bb);
                 if let Some(else_stmts) = else_block {
                     for stmt in else_stmts {
                         self.generate_statement(stmt)?;
                     }
                 }
-                let else_block_terminated = self
+                if !self
                     .builder
                     .get_insert_block()
                     .unwrap()
                     .get_terminator()
-                    .is_some();
-
-                let create_cont_bb = !then_block_terminated || !else_block_terminated;
-                let cont_bb = if create_cont_bb {
-                    Some(
-                        self.context
-                            .append_basic_block(fn_val, &format!("cont{}", current_bb_id)),
-                    )
-                } else {
-                    None
-                };
-
-                if !then_block_terminated {
-                    if let Some(cont) = cont_bb {
-                        self.builder.position_at_end(then_bb);
-                        let _ = self.builder.build_unconditional_branch(cont);
-                    }
+                    .is_some()
+                {
+                    let _ = self.builder.build_unconditional_branch(cont_bb);
                 }
-
-                if !else_block_terminated {
-                    if let Some(cont) = cont_bb {
-                        self.builder.position_at_end(else_bb);
-                        let _ = self.builder.build_unconditional_branch(cont);
-                    }
-                }
-
-                if let Some(cont) = cont_bb {
-                    self.builder.position_at_end(cont);
-                }
+                self.builder.position_at_end(cont_bb);
                 Ok(())
             }
             Stmt::Return(expr) => {
@@ -572,7 +558,15 @@ impl<'ctx> CodeGenerator<'ctx> {
                 }
             }
             Expr::Identifier(name) => {
-                let (ptr, lumora_type) = self.variables.get(name).unwrap();
+                let (ptr, lumora_type) =
+                    self.variables
+                        .get(name)
+                        .ok_or_else(|| LumoraError::CodegenError {
+                            code: "L038".to_string(),
+                            span: None,
+                            message: format!("Undefined variable: {}", name),
+                            help: None,
+                        })?;
                 let loaded_value_ref = unsafe {
                     LLVMBuildLoad2(
                         self.builder.as_mut_ptr(),
@@ -616,6 +610,9 @@ impl<'ctx> CodeGenerator<'ctx> {
                         Ok(unsafe { inkwell::values::PointerValue::new(loaded_value_ref).into() })
                     }
                     LumoraType::Struct(_) => Ok((*ptr).into()),
+                    LumoraType::Enum(_) => {
+                        Ok(unsafe { inkwell::values::IntValue::new(loaded_value_ref).into() })
+                    }
                 }
             }
             Expr::Binary { left, op, right } => {
@@ -1053,7 +1050,18 @@ impl<'ctx> CodeGenerator<'ctx> {
                     self.builder
                         .build_call(fn_val, arg_values.as_slice(), "call");
 
-                let (_, lumora_return_type) = self.all_functions.get(name).unwrap();
+                let (_, lumora_return_type) =
+                    self.all_functions
+                        .get(name)
+                        .ok_or_else(|| LumoraError::CodegenError {
+                            code: "L041".to_string(),
+                            span: None,
+                            message: format!(
+                                "Function '{}' not found in all_functions during codegen",
+                                name
+                            ),
+                            help: None,
+                        })?;
                 match call_site_value?.try_as_basic_value() {
                     Either::Left(basic_value) => Ok(basic_value),
                     Either::Right(_) => {
@@ -1641,13 +1649,33 @@ impl<'ctx> CodeGenerator<'ctx> {
                 }
             }
             Expr::StructLiteral { name, fields } => {
-                let struct_type = self.module.get_struct_type(name).unwrap();
+                let struct_type =
+                    self.module
+                        .get_struct_type(name)
+                        .ok_or_else(|| LumoraError::CodegenError {
+                            code: "L072".to_string(),
+                            span: None,
+                            message: format!(
+                                "Struct type '{}' not found in LLVM module during codegen",
+                                name
+                            ),
+                            help: None,
+                        })?;
                 let struct_alloca = self.builder.build_alloca(
                     struct_type.as_basic_type_enum(),
                     &format!("{}_literal", name),
                 )?;
 
-                let struct_def = self.struct_definitions.get(name).unwrap().clone();
+                let struct_def = self
+                    .struct_definitions
+                    .get(name)
+                    .ok_or_else(|| LumoraError::CodegenError {
+                        code: "L073".to_string(),
+                        span: None,
+                        message: format!("Struct definition '{}' not found during codegen", name),
+                        help: None,
+                    })?
+                    .clone();
 
                 for (i, (field_name, field_expr)) in fields.iter().enumerate() {
                     let field_val = self.generate_expression(field_expr)?;
@@ -1683,14 +1711,43 @@ impl<'ctx> CodeGenerator<'ctx> {
 
                 match target_type {
                     LumoraType::Struct(struct_name) => {
-                        let struct_type = self.module.get_struct_type(&struct_name).unwrap();
-                        let struct_def = self.struct_definitions.get(&struct_name).unwrap();
+                        let struct_type = self.module.get_struct_type(&struct_name).ok_or_else(
+                            || LumoraError::CodegenError {
+                                code: "L074".to_string(),
+                                span: None,
+                                message: format!(
+                                    "Struct type '{}' not found in LLVM module during field access",
+                                    struct_name
+                                ),
+                                help: None,
+                            },
+                        )?;
+                        let struct_def =
+                            self.struct_definitions.get(&struct_name).ok_or_else(|| {
+                                LumoraError::CodegenError {
+                                    code: "L075".to_string(),
+                                    span: None,
+                                    message: format!(
+                                        "Struct definition '{}' not found during field access",
+                                        struct_name
+                                    ),
+                                    help: None,
+                                }
+                            })?;
 
                         let field_index = struct_def
                             .fields
                             .iter()
                             .position(|(name, _)| name == field_name)
-                            .unwrap();
+                            .ok_or_else(|| LumoraError::CodegenError {
+                                code: "L076".to_string(),
+                                span: None,
+                                message: format!(
+                                    "Field '{}' not found in struct '{}' during field access",
+                                    field_name, struct_name
+                                ),
+                                help: None,
+                            })?;
 
                         let field_ptr = self.builder.build_struct_gep(
                             struct_type,
@@ -1721,6 +1778,37 @@ impl<'ctx> CodeGenerator<'ctx> {
                         ),
                         help: None,
                     }),
+                }
+            }
+            Expr::EnumVariant {
+                enum_name,
+                variant_name,
+            } => {
+                if let Some(variants) = self.enum_definitions.get(enum_name) {
+                    if let Some(index) = variants.iter().position(|v| v == variant_name) {
+                        Ok(self
+                            .context
+                            .i64_type()
+                            .const_int(index as u64, false)
+                            .into())
+                    } else {
+                        Err(LumoraError::CodegenError {
+                            code: "L077".to_string(),
+                            span: None,
+                            message: format!(
+                                "Variant '{}' not found in enum '{}' during codegen",
+                                variant_name, enum_name
+                            ),
+                            help: None,
+                        })
+                    }
+                } else {
+                    Err(LumoraError::CodegenError {
+                        code: "L078".to_string(),
+                        span: None,
+                        message: format!("Enum '{}' not found during codegen", enum_name),
+                        help: None,
+                    })
                 }
             }
             Expr::Unary { op, right } => {
@@ -1771,8 +1859,22 @@ impl<'ctx> CodeGenerator<'ctx> {
             }
         }
     }
-    fn type_to_llvm_type(&self, ty: &LumoraType) -> BasicTypeEnum<'ctx> {
+    fn resolve_lumora_type(&self, ty: &LumoraType) -> LumoraType {
         match ty {
+            LumoraType::Struct(name) => {
+                if self.enum_definitions.contains_key(name) {
+                    LumoraType::Enum(name.clone())
+                } else {
+                    LumoraType::Struct(name.clone())
+                }
+            }
+            _ => ty.clone(),
+        }
+    }
+
+    fn type_to_llvm_type(&self, ty: &LumoraType) -> BasicTypeEnum<'ctx> {
+        let resolved_ty = self.resolve_lumora_type(ty);
+        match resolved_ty {
             LumoraType::I32 => self.context.i32_type().into(),
             LumoraType::I64 => self.context.i64_type().into(),
             LumoraType::F64 => self.context.f64_type().into(),
@@ -1783,13 +1885,20 @@ impl<'ctx> CodeGenerator<'ctx> {
                 panic!("Void is not a basic type and cannot be converted to BasicTypeEnum")
             }
             LumoraType::Array(inner_type) => self
-                .type_to_llvm_type(inner_type)
+                .type_to_llvm_type(&inner_type)
                 .into_pointer_type()
                 .into(),
             LumoraType::Null => self.context.ptr_type(0.into()).into(),
-            LumoraType::Pointer(_inner_type) => self.context.ptr_type(0.into()).into(),
-            LumoraType::NullablePointer(_inner_type) => self.context.ptr_type(0.into()).into(),
-            LumoraType::Struct(name) => self.module.get_struct_type(name).unwrap().into(),
+            LumoraType::Pointer(inner_type) => self
+                .type_to_llvm_type(&inner_type)
+                .into_pointer_type()
+                .into(),
+            LumoraType::NullablePointer(inner_type) => self
+                .type_to_llvm_type(&inner_type)
+                .into_pointer_type()
+                .into(),
+            LumoraType::Struct(name) => self.module.get_struct_type(&name).unwrap().into(),
+            LumoraType::Enum(_) => self.context.i64_type().into(),
         }
     }
 
@@ -1921,7 +2030,18 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let target_type = self.type_of_expression(target)?;
                 match target_type {
                     LumoraType::Struct(struct_name) => {
-                        let struct_def = self.struct_definitions.get(&struct_name).unwrap();
+                        let struct_def =
+                            self.struct_definitions.get(&struct_name).ok_or_else(|| {
+                                LumoraError::CodegenError {
+                                    code: "L071".to_string(),
+                                    span: None,
+                                    message: format!(
+                                        "Struct '{}' not found during codegen",
+                                        struct_name
+                                    ),
+                                    help: None,
+                                }
+                            })?;
                         struct_def
                             .fields
                             .iter()
@@ -1948,6 +2068,10 @@ impl<'ctx> CodeGenerator<'ctx> {
                     }),
                 }
             }
+            Expr::EnumVariant {
+                enum_name,
+                variant_name: _,
+            } => Ok(LumoraType::Enum(enum_name.clone())),
             Expr::Unary { op, right } => {
                 let right_type = self.type_of_expression(right)?;
                 match op {

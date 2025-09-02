@@ -23,6 +23,8 @@ pub enum Token {
     Ext,
     #[token("struct")]
     Struct,
+    #[token("enum")]
+    Enum,
     #[token("stringof")]
     StringOf,
     #[token("i32of")]
@@ -103,6 +105,8 @@ pub enum Token {
     Divide,
     #[token(":")]
     Colon,
+    #[token("::")]
+    DoubleColon,
     #[token(".")]
     Dot,
     #[regex(r"-?[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?", |lex| lex.slice().parse().ok())]

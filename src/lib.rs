@@ -39,6 +39,7 @@ pub fn compile_lumora(source: &str, args: &[String]) -> Result<String, LumoraErr
         "lumora_program",
         type_checker.functions,
         type_checker.struct_definitions,
+        type_checker.enum_definitions,
         args.to_vec(),
     );
     let llvm_ir = codegen.generate(&program)?;

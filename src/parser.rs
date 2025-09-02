@@ -1,6 +1,6 @@
 use crate::ast::{
-    BinaryOp, Expr, ExternalFunction, Function, LumoraType, Program, Stmt, StructDefinition,
-    TopLevelDeclaration, UnaryOp,
+    BinaryOp, EnumDefinition, Expr, ExternalFunction, Function, LumoraType, Program, Stmt,
+    StructDefinition, TopLevelDeclaration, UnaryOp,
 };
 use crate::errors::{LumoraError, Span};
 use crate::lexer::{Spanned, Token};
@@ -91,6 +91,11 @@ impl Parser {
                         self.parse_struct_definition()?,
                     ));
                 }
+                Token::Enum => {
+                    declarations.push(TopLevelDeclaration::EnumDefinition(
+                        self.parse_enum_definition()?,
+                    ));
+                }
                 _ => {
                     return Err(LumoraError::ParseError {
                         code: "L006".to_string(),
@@ -99,7 +104,8 @@ impl Parser {
                             self.file_name.clone(),
                             &self.source_code,
                         )),
-                        message: "Expected 'use', 'exp', 'fn', 'ext', or 'struct'".to_string(),
+                        message: "Expected 'use', 'exp', 'fn', 'ext', 'struct', or 'enum'"
+                            .to_string(),
                         help: None,
                     });
                 }
@@ -317,6 +323,72 @@ impl Parser {
         self.expect(&Token::RightBrace)?;
 
         Ok(StructDefinition { name, fields })
+    }
+
+    fn parse_enum_definition(&mut self) -> Result<EnumDefinition, LumoraError> {
+        self.expect(&Token::Enum)?;
+        let name = match self.advance() {
+            Some(spanned_token) => match &spanned_token.value {
+                Token::Identifier(name) => name.clone(),
+                _ => {
+                    return Err(LumoraError::ParseError {
+                        code: "L070".to_string(),
+                        span: Some(Span::new(
+                            spanned_token.span.clone(),
+                            self.file_name.clone(),
+                            &self.source_code,
+                        )),
+                        message: "Expected enum name (identifier)".to_string(),
+                        help: None,
+                    });
+                }
+            },
+            None => {
+                return Err(LumoraError::ParseError {
+                    code: "L070".to_string(),
+                    span: None,
+                    message: "Unexpected end of input while expecting enum name".to_string(),
+                    help: None,
+                });
+            }
+        };
+
+        self.expect(&Token::LeftBrace)?;
+        let mut variants = Vec::new();
+        while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBrace)) {
+            let variant_name = match self.advance() {
+                Some(spanned_token) => match &spanned_token.value {
+                    Token::Identifier(name) => name.clone(),
+                    _ => {
+                        return Err(LumoraError::ParseError {
+                            code: "L071".to_string(),
+                            span: Some(Span::new(
+                                spanned_token.span.clone(),
+                                self.file_name.clone(),
+                                &self.source_code,
+                            )),
+                            message: "Expected variant name (identifier)".to_string(),
+                            help: None,
+                        });
+                    }
+                },
+                None => {
+                    return Err(LumoraError::ParseError {
+                        code: "L071".to_string(),
+                        span: None,
+                        message: "Unexpected end of input while expecting variant name".to_string(),
+                        help: None,
+                    });
+                }
+            };
+            variants.push(variant_name);
+            if matches!(self.peek().map(|s| &s.value), Some(Token::Comma)) {
+                self.advance();
+            }
+        }
+        self.expect(&Token::RightBrace)?;
+
+        Ok(EnumDefinition { name, variants })
     }
 
     fn parse_type(&mut self) -> Result<LumoraType, LumoraError> {
@@ -718,6 +790,38 @@ impl Parser {
                         let index = self.parse_expression()?;
                         self.expect(&Token::RightParen)?;
                         Ok(Expr::GetArg(Box::new(index)))
+                    } else if matches!(self.peek().map(|s| &s.value), Some(Token::DoubleColon)) {
+                        self.expect(&Token::DoubleColon)?;
+                        let variant_name = match self.advance() {
+                            Some(spanned_token) => match &spanned_token.value {
+                                Token::Identifier(v_name) => v_name.clone(),
+                                _ => {
+                                    return Err(LumoraError::ParseError {
+                                        code: "L072".to_string(),
+                                        span: Some(Span::new(
+                                            spanned_token.span.clone(),
+                                            self.file_name.clone(),
+                                            &self.source_code,
+                                        )),
+                                        message: "Expected variant name (identifier) after '::'"
+                                            .to_string(),
+                                        help: None,
+                                    });
+                                }
+                            },
+                            None => {
+                                return Err(LumoraError::ParseError {
+                                    code: "L072".to_string(),
+                                    span: None,
+                                    message: "Unexpected end of input while expecting variant name after '::'".to_string(),
+                                    help: None,
+                                });
+                            }
+                        };
+                        Ok(Expr::EnumVariant {
+                            enum_name: name,
+                            variant_name,
+                        })
                     } else if matches!(self.peek().map(|s| &s.value), Some(Token::LeftBrace)) {
                         self.advance();
                         let mut fields = Vec::new();

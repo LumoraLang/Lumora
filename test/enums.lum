@@ -1,0 +1,18 @@
+use stdlib/io;
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+fn main(): i32 {
+    let c: Color = Color::Green;
+    if c == Color::Red {
+        println("Color is Red");
+    } else if c == Color::Green {
+        println("Color is Green");
+    } else {
+        println("Color is Blue");
+    }
+    return 0;
+}

@@ -15,6 +15,7 @@ pub enum LumoraType {
     NullablePointer(Box<LumoraType>),
     Null,
     Struct(String),
+    Enum(String),
 }
 
 #[derive(Debug, Clone)]
@@ -66,6 +67,10 @@ pub enum Expr {
     FieldAccess {
         target: Box<Expr>,
         field_name: String,
+    },
+    EnumVariant {
+        enum_name: String,
+        variant_name: String,
     },
 }
 
@@ -133,10 +138,17 @@ pub struct StructDefinition {
 }
 
 #[derive(Debug, Clone)]
+pub struct EnumDefinition {
+    pub name: String,
+    pub variants: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
 pub enum TopLevelDeclaration {
     Function(Function),
     ExternalFunction(ExternalFunction),
     StructDefinition(StructDefinition),
+    EnumDefinition(EnumDefinition),
 }
 
 #[derive(Debug)]

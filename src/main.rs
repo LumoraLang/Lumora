@@ -78,6 +78,10 @@ struct Cli {
     #[arg(long, value_enum, default_value_t = OutputType::Executable)]
     output_type: OutputType,
 
+    /// Produce LLVM IR file (.ll) and do not delete it after compilation
+    #[arg(short = 'p', long)]
+    produce_ll: bool,
+
     #[command(subcommand)]
     command: Option<PmCommands>,
 }
@@ -326,12 +330,14 @@ fn run() -> Result<(), LumoraError> {
             help: Some("Ensure llc is installed and in your PATH.".to_string()),
         })?;
 
-    if let Err(e) = fs::remove_file(&ll_file) {
-        eprintln!(
-            "Warning: Could not delete temporary .ll file {}: {}",
-            ll_file.display(),
-            e
-        );
+    if !cli.produce_ll {
+        if let Err(e) = fs::remove_file(&ll_file) {
+            eprintln!(
+                "Warning: Could not delete temporary .ll file {}: {}",
+                ll_file.display(),
+                e
+            );
+        }
     }
 
     if !llc_output.status.success() {
@@ -339,6 +345,16 @@ fn run() -> Result<(), LumoraError> {
             "llc failed: {}",
             String::from_utf8_lossy(&llc_output.stderr)
         );
+
+        if !cli.produce_ll {
+            if let Err(e) = fs::remove_file(&ll_file) {
+                eprintln!(
+                    "Warning: Could not delete temporary .ll file {}: {}",
+                    ll_file.display(),
+                    e
+                );
+            }
+        }
 
         if let Err(e) = fs::remove_file(&o_file) {
             eprintln!(
