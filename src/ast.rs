@@ -70,6 +70,7 @@ pub enum BinaryOp {
     NotEqual,
     Less,
     Greater,
+    NullCoalescing,
 }
 
 #[derive(Debug, Clone)]

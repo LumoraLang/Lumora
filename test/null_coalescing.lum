@@ -1,0 +1,11 @@
+use stdlib/io;
+fn main(): i32 {
+    let p: &i32? = null;
+    let x: i32 = p ?? i32of(10);
+    println(stringof(x));
+    let val: i32 = 100;
+    let non_null_p: &i32? = &val;
+    let y: i32 = non_null_p ?? i32of(20);
+    println(stringof(y));
+    return 0;
+}

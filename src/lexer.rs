@@ -61,6 +61,8 @@ pub enum Token {
     Ampersand,
     #[token("?")]
     QuestionMark,
+    #[token("??")]
+    DoubleQuestionMark,
     #[token("(")]
     LeftParen,
     #[token(")")]

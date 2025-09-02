@@ -376,6 +376,36 @@ impl TypeChecker {
                             })
                         }
                     }
+                    BinaryOp::NullCoalescing => {
+                        match left_type {
+                            LumoraType::NullablePointer(inner_type) => {
+                                if *inner_type == right_type {
+                                    Ok(*inner_type)
+                                } else {
+                                    Err(LumoraError::TypeError {
+                                        code: "L055".to_string(),
+                                        span: None,
+                                        message: format!(
+                                            "Null coalescing operator requires right-hand side to be compatible with inner type of nullable pointer: expected {:?}, found {:?}",
+                                            *inner_type,
+                                            right_type
+                                        ),
+                                        help: None,
+                                    })
+                                }
+                            },
+                            LumoraType::Null => Ok(right_type),
+                            _ => Err(LumoraError::TypeError {
+                                code: "L056".to_string(),
+                                span: None,
+                                message: format!(
+                                    "Null coalescing operator can only be used with nullable pointers or null, found {:?}",
+                                    left_type
+                                ),
+                                help: None,
+                            }),
+                        }
+                    }
                 }
             }
             Expr::Unary { op, right } => {

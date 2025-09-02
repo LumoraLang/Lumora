@@ -323,6 +323,213 @@ impl<'ctx> CodeGenerator<'ctx> {
         }
     }
 
+    fn generate_string_binary_op(
+        &mut self,
+        left_val: BasicValueEnum<'ctx>,
+        right_val: BasicValueEnum<'ctx>,
+        left_lumora_type: LumoraType,
+        right_lumora_type: LumoraType,
+        op: &BinaryOp,
+    ) -> Result<BasicValueEnum<'ctx>, LumoraError> {
+        let i8_ptr_type = self.context.ptr_type(0.into());
+        let i64_type = self.context.i64_type();
+        match op {
+            BinaryOp::Add => {
+                if left_lumora_type == LumoraType::String
+                    && right_lumora_type == LumoraType::String
+                {
+                    let strlen_fn = self.module.get_function("strlen").unwrap();
+                    let strcpy_fn = self.module.get_function("strcpy").unwrap();
+                    let strcat_fn = self.module.get_function("strcat").unwrap();
+                    let malloc_fn = self.module.get_function("malloc").unwrap();
+                    let left_str = left_val.into_pointer_value();
+                    let right_str = right_val.into_pointer_value();
+                    let left_len = self
+                        .builder
+                        .build_call(strlen_fn, &[left_str.into()], "left_len")?
+                        .try_as_basic_value()
+                        .left()
+                        .unwrap()
+                        .into_int_value();
+                    let right_len = self
+                        .builder
+                        .build_call(strlen_fn, &[right_str.into()], "right_len")?
+                        .try_as_basic_value()
+                        .left()
+                        .unwrap()
+                        .into_int_value();
+                    let total_len =
+                        self.builder
+                            .build_int_add(left_len, right_len, "total_len")?;
+                    let total_len_plus_null = self.builder.build_int_add(
+                        total_len,
+                        i64_type.const_int(1, false),
+                        "total_len_plus_null",
+                    )?;
+                    let new_str_ptr = self
+                        .builder
+                        .build_call(
+                            malloc_fn,
+                            &[total_len_plus_null.into()],
+                            "new_str_ptr",
+                        )?
+                        .try_as_basic_value()
+                        .left()
+                        .unwrap()
+                        .into_pointer_value();
+                    self.builder.build_call(
+                        strcpy_fn,
+                        &[new_str_ptr.into(), left_str.into()],
+                        "strcpy_call",
+                    )?;
+                    self.builder.build_call(
+                        strcat_fn,
+                        &[new_str_ptr.into(), right_str.into()],
+                        "strcat_call",
+                    )?;
+                    Ok(new_str_ptr.into())
+                } else {
+                    return Err(LumoraError::CodegenError {
+                        code: "L030".to_string(),
+                        span: None,
+                        message: "String addition requires both operands to be strings"
+                            .to_string(),
+                        help: None,
+                    });
+                }
+            },
+            BinaryOp::NullCoalescing => {
+                return Err(LumoraError::CodegenError {
+                    code: "L057".to_string(),
+                    span: None,
+                    message: "Null coalescing operator not supported for string types".to_string(),
+                    help: None,
+                });
+            }
+            BinaryOp::Mul => {
+                let (str_val, int_val) = if left_lumora_type == LumoraType::String {
+                    (left_val.into_pointer_value(), right_val.into_int_value())
+                } else {
+                    (right_val.into_pointer_value(), left_val.into_int_value())
+                };
+
+                let strlen_fn = self.module.get_function("strlen").unwrap();
+                let malloc_fn = self.module.get_function("malloc").unwrap();
+                let strcpy_fn = self.module.get_function("strcpy").unwrap();
+                let str_len = self
+                    .builder
+                    .build_call(strlen_fn, &[str_val.into()], "str_len")?
+                    .try_as_basic_value()
+                    .left()
+                    .unwrap()
+                    .into_int_value();
+                let total_len =
+                    self.builder.build_int_mul(str_len, int_val, "total_len")?;
+                let total_len_plus_null = self.builder.build_int_add(
+                    total_len,
+                    i64_type.const_int(1, false),
+                    "total_len_plus_null",
+                )?;
+                let new_str_ptr = self
+                    .builder
+                    .build_call(
+                        malloc_fn,
+                        &[total_len_plus_null.into()],
+                        "new_str_ptr",
+                    )?
+                    .try_as_basic_value()
+                    .left()
+                    .unwrap()
+                    .into_pointer_value();
+                self.builder.build_store(
+                    new_str_ptr,
+                    self.context.i8_type().const_int(0, false),
+                )?;
+                let loop_bb = self.context.append_basic_block(
+                    self.builder
+                        .get_insert_block()
+                        .unwrap()
+                        .get_parent()
+                        .unwrap(),
+                    "loop_bb",
+                );
+                let after_loop_bb = self.context.append_basic_block(
+                    self.builder
+                        .get_insert_block()
+                        .unwrap()
+                        .get_parent()
+                        .unwrap(),
+                    "after_loop_bb",
+                );
+                let counter_alloca =
+                    self.builder.build_alloca(i64_type, "counter_alloca")?;
+                self.builder
+                    .build_store(counter_alloca, i64_type.const_int(0, false))?;
+                self.builder.build_unconditional_branch(loop_bb)?;
+                self.builder.position_at_end(loop_bb);
+                let current_counter = self
+                    .builder
+                    .build_load(i64_type, counter_alloca, "current_counter")?
+                    .into_int_value();
+                let loop_cond = self.builder.build_int_compare(
+                    IntPredicate::SLT,
+                    current_counter,
+                    int_val,
+                    "loop_cond",
+                )?;
+                self.builder.build_conditional_branch(
+                    loop_cond,
+                    {
+                        let current_pos_ptr = self
+                            .builder
+                            .build_call(
+                                strlen_fn,
+                                &[new_str_ptr.into()],
+                                "current_pos_ptr",
+                            )?
+                            .try_as_basic_value()
+                            .left()
+                            .unwrap()
+                            .into_int_value();
+                        let current_pos_gep = unsafe {
+                            self.builder
+                                .build_gep(
+                                    i8_ptr_type,
+                                    new_str_ptr,
+                                    &[current_pos_ptr.into()],
+                                    "current_pos_gep",
+                                )
+                                .unwrap()
+                        };
+                        self.builder.build_call(
+                            strcpy_fn,
+                            &[current_pos_gep.into(), str_val.into()],
+                            "strcpy_loop",
+                        )?;
+
+                        let next_counter = self.builder.build_int_add(
+                            current_counter,
+                            i64_type.const_int(1, false),
+                            "next_counter",
+                        )?;
+                        self.builder.build_store(counter_alloca, next_counter)?;
+                        loop_bb
+                    },
+                    after_loop_bb,
+                )?;
+
+                self.builder.position_at_end(after_loop_bb);
+                Ok(new_str_ptr.into())
+            }
+            _ => Err(LumoraError::CodegenError {
+                code: "L064".to_string(),
+                span: None,
+                message: format!("Unsupported binary operation for string types: {:?}", op),
+                help: None,
+            }),
+        }
+    }
+
     fn generate_expression(&mut self, expr: &Expr) -> Result<BasicValueEnum<'ctx>, LumoraError> {
         match expr {
             Expr::Integer(n) => Ok(self.context.i64_type().const_int(*n as u64, true).into()),
@@ -413,197 +620,74 @@ impl<'ctx> CodeGenerator<'ctx> {
                 let right_val = self.generate_expression(right)?;
                 let left_lumora_type = self.type_of_expression(left)?;
                 let right_lumora_type = self.type_of_expression(right)?;
-                if left_lumora_type == LumoraType::String || right_lumora_type == LumoraType::String
+
+                if matches!(op, BinaryOp::NullCoalescing) {
+                    let inner_type = match left_lumora_type {
+                        LumoraType::NullablePointer(inner) => *inner,
+                        _ => {
+                            return Err(LumoraError::CodegenError {
+                                code: "L058".to_string(),
+                                span: None,
+                                message: "Null coalescing operator can only be used with nullable pointers".to_string(),
+                                help: None,
+                            });
+                        }
+                    };
+
+                    let fn_val = self
+                        .builder
+                        .get_insert_block()
+                        .unwrap()
+                        .get_parent()
+                        .unwrap();
+
+                    let is_null_bb = self.context.append_basic_block(fn_val, "is_null");
+                    let is_not_null_bb = self.context.append_basic_block(fn_val, "is_not_null");
+                    let merge_bb = self.context.append_basic_block(fn_val, "merge");
+
+                    let is_null_cond = self.builder.build_is_null(
+                        left_val.into_pointer_value(),
+                        "is_null_cond",
+                    )?;
+
+                    self.builder.build_conditional_branch(
+                        is_null_cond,
+                        is_null_bb,
+                        is_not_null_bb,
+                    )?;
+
+                    self.builder.position_at_end(is_not_null_bb);
+                    let loaded_left_val = self.builder.build_load(
+                        self.type_to_llvm_type(&inner_type),
+                        left_val.into_pointer_value(),
+                        "loaded_left_val",
+                    )?;
+                    let left_val_not_null = loaded_left_val;
+                    self.builder.build_unconditional_branch(merge_bb)?;
+
+                    self.builder.position_at_end(is_null_bb);
+                    let right_val_is_null = right_val;
+                    self.builder.build_unconditional_branch(merge_bb)?;
+
+                    self.builder.position_at_end(merge_bb);
+                    let phi = self.builder.build_phi(
+                        self.type_to_llvm_type(&inner_type),
+                        "null_coalescing_phi",
+                    )?;
+                    phi.add_incoming(&[
+                        (&left_val_not_null, is_not_null_bb),
+                        (&right_val_is_null, is_null_bb),
+                    ]);
+                    Ok(phi.as_basic_value())
+                } else if left_lumora_type == LumoraType::String || right_lumora_type == LumoraType::String
                 {
-                    let i8_ptr_type = self.context.ptr_type(0.into());
-                    let i64_type = self.context.i64_type();
-                    match op {
-                        BinaryOp::Add => {
-                            if left_lumora_type == LumoraType::String
-                                && right_lumora_type == LumoraType::String
-                            {
-                                let strlen_fn = self.module.get_function("strlen").unwrap();
-                                let strcpy_fn = self.module.get_function("strcpy").unwrap();
-                                let strcat_fn = self.module.get_function("strcat").unwrap();
-                                let malloc_fn = self.module.get_function("malloc").unwrap();
-                                let left_str = left_val.into_pointer_value();
-                                let right_str = right_val.into_pointer_value();
-                                let left_len = self
-                                    .builder
-                                    .build_call(strlen_fn, &[left_str.into()], "left_len")?
-                                    .try_as_basic_value()
-                                    .left()
-                                    .unwrap()
-                                    .into_int_value();
-                                let right_len = self
-                                    .builder
-                                    .build_call(strlen_fn, &[right_str.into()], "right_len")?
-                                    .try_as_basic_value()
-                                    .left()
-                                    .unwrap()
-                                    .into_int_value();
-                                let total_len =
-                                    self.builder
-                                        .build_int_add(left_len, right_len, "total_len")?;
-                                let total_len_plus_null = self.builder.build_int_add(
-                                    total_len,
-                                    i64_type.const_int(1, false),
-                                    "total_len_plus_null",
-                                )?;
-                                let new_str_ptr = self
-                                    .builder
-                                    .build_call(
-                                        malloc_fn,
-                                        &[total_len_plus_null.into()],
-                                        "new_str_ptr",
-                                    )?
-                                    .try_as_basic_value()
-                                    .left()
-                                    .unwrap()
-                                    .into_pointer_value();
-                                self.builder.build_call(
-                                    strcpy_fn,
-                                    &[new_str_ptr.into(), left_str.into()],
-                                    "strcpy_call",
-                                )?;
-                                self.builder.build_call(
-                                    strcat_fn,
-                                    &[new_str_ptr.into(), right_str.into()],
-                                    "strcat_call",
-                                )?;
-                                Ok(new_str_ptr.into())
-                            } else {
-                                return Err(LumoraError::CodegenError {
-                                    code: "L030".to_string(),
-                                    span: None,
-                                    message: "String addition requires both operands to be strings"
-                                        .to_string(),
-                                    help: None,
-                                });
-                            }
-                        }
-                        BinaryOp::Mul => {
-                            let (str_val, int_val) = if left_lumora_type == LumoraType::String {
-                                (left_val.into_pointer_value(), right_val.into_int_value())
-                            } else {
-                                (right_val.into_pointer_value(), left_val.into_int_value())
-                            };
-
-                            let strlen_fn = self.module.get_function("strlen").unwrap();
-                            let malloc_fn = self.module.get_function("malloc").unwrap();
-                            let strcpy_fn = self.module.get_function("strcpy").unwrap();
-                            let str_len = self
-                                .builder
-                                .build_call(strlen_fn, &[str_val.into()], "str_len")?
-                                .try_as_basic_value()
-                                .left()
-                                .unwrap()
-                                .into_int_value();
-                            let total_len =
-                                self.builder.build_int_mul(str_len, int_val, "total_len")?;
-                            let total_len_plus_null = self.builder.build_int_add(
-                                total_len,
-                                i64_type.const_int(1, false),
-                                "total_len_plus_null",
-                            )?;
-                            let new_str_ptr = self
-                                .builder
-                                .build_call(
-                                    malloc_fn,
-                                    &[total_len_plus_null.into()],
-                                    "new_str_ptr",
-                                )?
-                                .try_as_basic_value()
-                                .left()
-                                .unwrap()
-                                .into_pointer_value();
-                            self.builder.build_store(
-                                new_str_ptr,
-                                self.context.i8_type().const_int(0, false),
-                            )?;
-                            let loop_bb = self.context.append_basic_block(
-                                self.builder
-                                    .get_insert_block()
-                                    .unwrap()
-                                    .get_parent()
-                                    .unwrap(),
-                                "loop_bb",
-                            );
-                            let after_loop_bb = self.context.append_basic_block(
-                                self.builder
-                                    .get_insert_block()
-                                    .unwrap()
-                                    .get_parent()
-                                    .unwrap(),
-                                "after_loop_bb",
-                            );
-                            let counter_alloca =
-                                self.builder.build_alloca(i64_type, "counter_alloca")?;
-                            self.builder
-                                .build_store(counter_alloca, i64_type.const_int(0, false))?;
-                            self.builder.build_unconditional_branch(loop_bb)?;
-                            self.builder.position_at_end(loop_bb);
-                            let current_counter = self
-                                .builder
-                                .build_load(i64_type, counter_alloca, "current_counter")?
-                                .into_int_value();
-                            let loop_cond = self.builder.build_int_compare(
-                                IntPredicate::SLT,
-                                current_counter,
-                                int_val,
-                                "loop_cond",
-                            )?;
-                            self.builder.build_conditional_branch(
-                                loop_cond,
-                                {
-                                    let current_pos_ptr = self
-                                        .builder
-                                        .build_call(
-                                            strlen_fn,
-                                            &[new_str_ptr.into()],
-                                            "current_pos_ptr",
-                                        )?
-                                        .try_as_basic_value()
-                                        .left()
-                                        .unwrap()
-                                        .into_int_value();
-                                    let current_pos_gep = unsafe {
-                                        self.builder
-                                            .build_gep(
-                                                i8_ptr_type,
-                                                new_str_ptr,
-                                                &[current_pos_ptr.into()],
-                                                "current_pos_gep",
-                                            )
-                                            .unwrap()
-                                    };
-                                    self.builder.build_call(
-                                        strcpy_fn,
-                                        &[current_pos_gep.into(), str_val.into()],
-                                        "strcpy_loop",
-                                    )?;
-
-                                    let next_counter = self.builder.build_int_add(
-                                        current_counter,
-                                        i64_type.const_int(1, false),
-                                        "next_counter",
-                                    )?;
-                                    self.builder.build_store(counter_alloca, next_counter)?;
-                                    loop_bb
-                                },
-                                after_loop_bb,
-                            )?;
-
-                            self.builder.position_at_end(after_loop_bb);
-                            Ok(new_str_ptr.into())
-                        }
-                        _ => Err(LumoraError::CodegenError {
-                            code: "L030".to_string(),
-                            span: None,
-                            message: "Unsupported string binary operation".to_string(),
-                            help: None,
-                        }),
-                    }
+                    self.generate_string_binary_op(
+                        left_val,
+                        right_val,
+                        left_lumora_type,
+                        right_lumora_type,
+                        op,
+                    )
                 } else if left_val.is_int_value() && right_val.is_int_value() {
                     let mut left_int_val = left_val.into_int_value();
                     let mut right_int_val = right_val.into_int_value();
@@ -644,6 +728,48 @@ impl<'ctx> CodeGenerator<'ctx> {
                             .builder
                             .build_int_compare(IntPredicate::EQ, left_int_val, right_int_val, "eq")?
                             .into()),
+                        BinaryOp::NullCoalescing => {
+                            let fn_val = self
+                                .builder
+                                .get_insert_block()
+                                .unwrap()
+                                .get_parent()
+                                .unwrap();
+
+                            let is_null_bb = self.context.append_basic_block(fn_val, "is_null");
+                            let is_not_null_bb = self.context.append_basic_block(fn_val, "is_not_null");
+                            let merge_bb = self.context.append_basic_block(fn_val, "merge");
+
+                            let is_null_cond = self.builder.build_is_null(
+                                left_val.into_pointer_value(),
+                                "is_null_cond",
+                            )?;
+
+                            self.builder.build_conditional_branch(
+                                is_null_cond,
+                                is_null_bb,
+                                is_not_null_bb,
+                            )?;
+
+                            self.builder.position_at_end(is_not_null_bb);
+                            let left_val_not_null = left_val;
+                            self.builder.build_unconditional_branch(merge_bb)?;
+
+                            self.builder.position_at_end(is_null_bb);
+                            let right_val_is_null = right_val;
+                            self.builder.build_unconditional_branch(merge_bb)?;
+
+                            self.builder.position_at_end(merge_bb);
+                            let phi = self.builder.build_phi(
+                                self.type_to_llvm_type(&self.type_of_expression(left)?),
+                                "null_coalescing_phi",
+                            )?;
+                            phi.add_incoming(&[
+                                (&left_val_not_null, is_not_null_bb),
+                                (&right_val_is_null, is_null_bb),
+                            ]);
+                            Ok(phi.as_basic_value())
+                        },
                         BinaryOp::NotEqual => Ok(self
                             .builder
                             .build_int_compare(IntPredicate::NE, left_int_val, right_int_val, "ne")?
@@ -737,6 +863,48 @@ impl<'ctx> CodeGenerator<'ctx> {
                                 "fgt",
                             )?
                             .into()),
+                        BinaryOp::NullCoalescing => {
+                            let fn_val = self
+                                .builder
+                                .get_insert_block()
+                                .unwrap()
+                                .get_parent()
+                                .unwrap();
+
+                            let is_null_bb = self.context.append_basic_block(fn_val, "is_null");
+                            let is_not_null_bb = self.context.append_basic_block(fn_val, "is_not_null");
+                            let merge_bb = self.context.append_basic_block(fn_val, "merge");
+
+                            let is_null_cond = self.builder.build_is_null(
+                                left_val.into_pointer_value(),
+                                "is_null_cond",
+                            )?;
+
+                            self.builder.build_conditional_branch(
+                                is_null_cond,
+                                is_null_bb,
+                                is_not_null_bb,
+                            )?;
+
+                            self.builder.position_at_end(is_not_null_bb);
+                            let left_val_not_null = left_val;
+                            self.builder.build_unconditional_branch(merge_bb)?;
+
+                            self.builder.position_at_end(is_null_bb);
+                            let right_val_is_null = right_val;
+                            self.builder.build_unconditional_branch(merge_bb)?;
+
+                            self.builder.position_at_end(merge_bb);
+                            let phi = self.builder.build_phi(
+                                self.type_to_llvm_type(&self.type_of_expression(left)?),
+                                "null_coalescing_phi",
+                            )?;
+                            phi.add_incoming(&[
+                                (&left_val_not_null, is_not_null_bb),
+                                (&right_val_is_null, is_null_bb),
+                            ]);
+                            Ok(phi.as_basic_value())
+                        }
                     }
                 } else if (left_lumora_type == LumoraType::Null
                     || right_lumora_type == LumoraType::Null)
@@ -1599,6 +1767,18 @@ impl<'ctx> CodeGenerator<'ctx> {
                                 message: "Comparison requires same types".to_string(),
                                 help: None,
                             })
+                        }
+                    }
+                    BinaryOp::NullCoalescing => {
+                        match left_type {
+                            LumoraType::NullablePointer(inner_type) => Ok(*inner_type),
+                            LumoraType::Null => Ok(right_type),
+                            _ => Err(LumoraError::CodegenError {
+                                code: "L063".to_string(),
+                                span: None,
+                                message: "Null coalescing operator can only be used with nullable pointers or null".to_string(),
+                                help: None,
+                            }),
                         }
                     }
                 }

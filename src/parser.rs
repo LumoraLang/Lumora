@@ -488,7 +488,27 @@ impl Parser {
     }
 
     fn parse_expression(&mut self) -> Result<Expr, LumoraError> {
-        self.parse_equality()
+        self.parse_null_coalescing()
+    }
+
+    fn parse_null_coalescing(&mut self) -> Result<Expr, LumoraError> {
+        let mut expr = self.parse_equality()?;
+        while let Some(op) = self.peek().map(|s| s.value.clone()) {
+            let binary_op = match op {
+                Token::DoubleQuestionMark => BinaryOp::NullCoalescing,
+                _ => break,
+            };
+
+            self.advance();
+            let right = self.parse_null_coalescing()?;
+            expr = Expr::Binary {
+                left: Box::new(expr),
+                op: binary_op,
+                right: Box::new(right),
+            };
+        }
+
+        Ok(expr)
     }
 
     fn parse_equality(&mut self) -> Result<Expr, LumoraError> {
