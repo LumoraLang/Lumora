@@ -779,6 +779,9 @@ impl Parser {
                 Token::False => Ok(Expr::Boolean(false)),
                 Token::Null => Ok(Expr::Null),
                 Token::StringLiteral(s) => Ok(Expr::StringLiteral(s.clone())),
+                Token::Struct => {
+                    self.parse_struct_literal_expression()
+                }
                 Token::Identifier(name_token) => {
                     let name = name_token.clone();
                     if name == "arg_count" {
@@ -822,46 +825,7 @@ impl Parser {
                             enum_name: name,
                             variant_name,
                         })
-                    } else if matches!(self.peek().map(|s| &s.value), Some(Token::LeftBrace)) {
-                        self.advance();
-                        let mut fields = Vec::new();
-                        while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBrace)) {
-                            let field_name = match self.advance() {
-                                Some(spanned_token) => {
-                                    match &spanned_token.value {
-                                        Token::Identifier(f_name) => f_name.clone(),
-                                        _ => {
-                                            return Err(LumoraError::ParseError {
-                                            code: "L035".to_string(),
-                                            span: Some(Span::new(
-                                                spanned_token.span.clone(),
-                                                self.file_name.clone(),
-                                                &self.source_code,
-                                            )),
-                                            message: "Expected field name (identifier) in struct literal".to_string(),
-                                            help: None,
-                                        });
-                                        }
-                                    }
-                                }
-                                None => {
-                                    return Err(LumoraError::ParseError {
-                                        code: "L035".to_string(),
-                                        span: None,
-                                        message: "Unexpected end of input while expecting field name in struct literal".to_string(),
-                                        help: None,
-                                    });
-                                }
-                            };
-                            self.expect(&Token::Colon)?;
-                            let field_value = self.parse_expression()?;
-                            fields.push((field_name, field_value));
-                            if matches!(self.peek().map(|s| &s.value), Some(Token::Comma)) {
-                                self.advance();
-                            }
-                        }
-                        self.expect(&Token::RightBrace)?;
-                        Ok(Expr::StructLiteral { name, fields })
+                    
                     } else if matches!(self.peek().map(|s| &s.value), Some(Token::LeftParen)) {
                         self.advance();
                         let mut args = Vec::new();
@@ -1042,5 +1006,73 @@ impl Parser {
         self.expect(&Token::Semicolon)?;
         module_path.push_str(".lum");
         Ok(module_path)
+    }
+
+    fn parse_struct_literal_expression(&mut self) -> Result<Expr, LumoraError> {
+        let name = match self.advance() {
+            Some(spanned_token) => match &spanned_token.value {
+                Token::Identifier(name) => name.clone(),
+                _ => {
+                    return Err(LumoraError::ParseError {
+                        code: "L032".to_string(),
+                        span: Some(Span::new(
+                            spanned_token.span.clone(),
+                            self.file_name.clone(),
+                            &self.source_code,
+                        )),
+                        message: "Expected struct name (identifier) after 'struct' keyword".to_string(),
+                        help: None,
+                    });
+                }
+            },
+            None => {
+                return Err(LumoraError::ParseError {
+                    code: "L032".to_string(),
+                    span: None,
+                    message: "Unexpected end of input while expecting struct name after 'struct' keyword".to_string(),
+                    help: None,
+                });
+            }
+        };
+
+        self.expect(&Token::LeftBrace)?;
+        let mut fields = Vec::new();
+        while !matches!(self.peek().map(|s| &s.value), Some(Token::RightBrace)) {
+            let field_name = match self.advance() {
+                Some(spanned_token) => {
+                    match &spanned_token.value {
+                        Token::Identifier(f_name) => f_name.clone(),
+                        _ => {
+                            return Err(LumoraError::ParseError {
+                                code: "L035".to_string(),
+                                span: Some(Span::new(
+                                    spanned_token.span.clone(),
+                                    self.file_name.clone(),
+                                    &self.source_code,
+                                )),
+                                message: "Expected field name (identifier) in struct literal".to_string(),
+                                help: None,
+                            });
+                        }
+                    }
+                }
+                None => {
+                    return Err(LumoraError::ParseError {
+                        code: "L035".to_string(),
+                        span: None,
+                        message: "Unexpected end of input while expecting field name in struct literal".to_string(),
+                        help: None,
+                    });
+                }
+            };
+            self.expect(&Token::Colon)?;
+            let field_value = self.parse_expression()?;
+            fields.push((field_name, field_value));
+            if matches!(self.peek().map(|s| &s.value), Some(Token::Comma)) {
+                self.advance();
+            }
+        }
+        self.expect(&Token::RightBrace)?;
+        Ok(Expr::StructLiteral { name, fields })
     }
 }
