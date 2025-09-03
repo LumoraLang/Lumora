@@ -2,6 +2,6 @@ use stdlib/io;
 use stdlib/misc;
 use stdlib/log;
 fn main() -> i32 {
-    println("Hello\e[31m Red Text\e[0m Normal Text");
+    info("Hello\e[31m Red Text\e[0m Normal Text");
     return assert(false, "h");
 }
