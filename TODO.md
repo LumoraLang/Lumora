@@ -5,6 +5,6 @@
 - [x] ~f32 support (probably)~
 - [x] ~type conversions like stringof(), i32of(), i64of(), boolof(), f32of(), f64of()~
 - [x] ~fix using nested structs (using, not defining or assigning) causes the compiler to panic~  (done)
-- [x] pointers and null things
+- [x] ~pointers and null things~
 - [x] ~enums and structs~
 - [x] ~preprocessor~
