@@ -3,6 +3,7 @@ use logos::{Lexer, Logos};
 pub enum Token {
     #[regex(r"[ \t\n\f]+", logos::skip)]
     #[regex(r"//[^\n]*", logos::skip)]
+    #[regex(r"~.*", logos::skip)]
     #[regex(r"/\*[^*]*\*+(?:[^/*][^*]*\*+)*/", logos::skip)]
     #[token("fn")]
     Fn,

@@ -5,6 +5,7 @@ pub mod errors;
 pub mod lexer;
 pub mod parser;
 pub mod pm;
+pub mod preprocessor;
 pub mod type_checker;
 use crate::codegen::CodeGenerator;
 use crate::errors::{LumoraError, Span};

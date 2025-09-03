@@ -30,7 +30,7 @@ impl Span {
     }
 }
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone)]
 pub enum LumoraError {
     #[error("{code}: {message}")]
     ParseError {
@@ -48,6 +48,13 @@ pub enum LumoraError {
     },
     #[error("{code}: {message}")]
     CodegenError {
+        code: String,
+        span: Option<Span>,
+        message: String,
+        help: Option<String>,
+    },
+    #[error("{code}: {message}")]
+    PreprocessorError {
         code: String,
         span: Option<Span>,
         message: String,

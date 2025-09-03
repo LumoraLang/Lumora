@@ -20,6 +20,7 @@ fn main() {
             LumoraError::ParseError { span, .. } => span.as_ref(),
             LumoraError::TypeError { span, .. } => span.as_ref(),
             LumoraError::CodegenError { span, .. } => span.as_ref(),
+            LumoraError::PreprocessorError { span, .. } => span.as_ref(),
             LumoraError::ConfigurationError { .. } => None,
         } {
             eprintln!(
@@ -40,6 +41,7 @@ fn main() {
             LumoraError::ParseError { help, .. } => help.as_ref(),
             LumoraError::TypeError { help, .. } => help.as_ref(),
             LumoraError::CodegenError { help, .. } => help.as_ref(),
+            LumoraError::PreprocessorError { help, .. } => help.as_ref(),
             LumoraError::ConfigurationError { help, .. } => help.as_ref(),
         } {
             eprintln!("help: {}", help);
@@ -143,12 +145,16 @@ fn run() -> Result<(), LumoraError> {
             .unwrap_or_else(|| output_dir.join("a.out"))
     };
 
+    use lumora::preprocessor::Preprocessor;
     let source_code =
         fs::read_to_string(&input_file).map_err(|e| LumoraError::ConfigurationError {
             message: format!("Could not read input file {}: {}", input_file.display(), e),
             help: Some("Ensure the input file exists and you have read permissions.".to_string()),
         })?;
-    let mut lexer = Token::lexer(&source_code).spanned();
+    
+    let mut preprocessor = Preprocessor::new();
+    let preprocessed_code = preprocessor.preprocess(&source_code)?;
+    let mut lexer = Token::lexer(&preprocessed_code).spanned();
     let mut tokens = Vec::new();
     while let Some((token_result, span)) = lexer.next() {
         let token = token_result.map_err(|_| LumoraError::ParseError {
@@ -156,7 +162,7 @@ fn run() -> Result<(), LumoraError> {
             span: Some(lumora::errors::Span::new(
                 span.clone(),
                 input_file.to_string_lossy().to_string(),
-                &source_code,
+                &preprocessed_code,
             )),
             message: "Lexing error: Unrecognized token".to_string(),
             help: None,
@@ -167,7 +173,7 @@ fn run() -> Result<(), LumoraError> {
     let mut parser = LumoraParser::new(
         tokens,
         input_file.to_string_lossy().to_string(),
-        source_code.clone(),
+        preprocessed_code.clone(),
     );
     let program = parser.parse()?;
     let mut type_checker = TypeChecker::new();
@@ -188,7 +194,8 @@ fn run() -> Result<(), LumoraError> {
                 ),
             }
         })?;
-        let imported_llvm_ir = compile_lumora(&imported_source_code, &[])?;
+        let imported_preprocessed_code = preprocessor.preprocess(&imported_source_code)?;
+        let imported_llvm_ir = compile_lumora(&imported_preprocessed_code, &[])?;
         let imported_ll_file = output_dir.join(format!("{}.ll", imported_output_name));
         fs::create_dir_all(imported_ll_file.parent().unwrap()).map_err(|e| {
             LumoraError::ConfigurationError {
@@ -267,7 +274,7 @@ fn run() -> Result<(), LumoraError> {
     }
 
     let args: Vec<String> = std::env::args().collect();
-    let llvm_ir = compile_lumora(&source_code, &args)?;
+    let llvm_ir = compile_lumora(&preprocessed_code, &args)?;
     let ll_file = output_dir.join(format!(
         "{}.ll",
         output_name.file_name().unwrap().to_str().unwrap()

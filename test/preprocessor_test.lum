@@ -1,0 +1,149 @@
+~define APPNAME "MyAwesomeApp"~
+~if APPNAME == "MyAwesomeApp"; define VERSION "1.0"~
+~define GREETING "Hello, ~APPNAME~!"~
+~define NESTED "Welcome to ~GREETING~"~
+~define UNDEF "something"~
+~define TEST_NEQ "test"~
+ext fn puts(string) -> i32;
+fn main() -> i32 {
+    puts("Application Name: ~APPNAME~");
+    puts("Version: ~VERSION~");
+    puts("~GREETING~");
+    puts("~NESTED~");
+    ~if UNDEF == "something"~
+    puts("yo");
+    ~endif~
+    ~if TEST_NEQ != "other"~
+    puts("neq works");
+    ~endif~
+    puts("~B~");
+    return 0;
+}
+
+~undef VERSION~
+~ifdef VERSION~
+ext fn version_info() -> string;
+
+fn version_info() -> string {
+    return "Version is defined";
+}
+~else~
+fn version_info() -> string {
+    return "Version is not defined";
+}
+~endif~
+
+~define FEATURE_ENABLED "true"~
+~if FEATURE_ENABLED == "true"~
+fn feature() -> string {
+    return "Feature is enabled";
+}
+~else~
+fn feature() -> string {
+    return "Feature is disabled";
+}
+~endif~
+
+~ifndef DEBUG~
+~define DEBUG "false"~
+~endif~
+
+~if DEBUG == "true"~
+fn debug_mode() -> string {
+    return "Debug mode is on";
+}
+~elif DEBUG == "false"~
+fn debug_mode() -> string {
+    return "Debug mode is off";
+}
+~else~
+fn debug_mode() -> string {
+    return "Debug mode unknown";
+}
+~endif~
+
+~define OS "Linux"~
+~if OS == "Linux"~
+fn os_info() -> string {
+    return "Running on GNU/Linux";
+}
+~elif OS == "Windows"~
+fn os_info() -> string {
+    return "Running on Windows";
+}
+~else~
+fn os_info() -> string {
+    return "Unknown OS";
+}
+~endif~
+
+~define BUILD_TYPE "release"~
+~if BUILD_TYPE != "debug"~
+fn build_info() -> string {
+    return "Release build";
+}
+~else~
+fn build_info() -> string {
+    return "Debug build";
+}
+~endif~
+
+~define LEVEL1 "value1"~
+~define LEVEL2 "~LEVEL1~"~
+~define LEVEL3 "~LEVEL2~"~
+fn nested_test() -> string {
+    return "~LEVEL3~";
+}
+
+~define COND_VAR "yes"~
+~if COND_VAR == "yes"; define COND_RESULT "positive"~
+~if COND_RESULT == "positive"~
+fn conditional_define_test() -> string {
+    return "Conditional define worked";
+}
+~endif~
+
+~define MULTI "multi"~
+~define LINE "This is a ~MULTI~ line test"~
+fn multi_line() -> string {
+    return "~LINE~";
+}
+
+~define NUM "5"~
+~if NUM > "3"~
+fn greater_test() -> string {
+    return "Greater than 3";
+}
+~endif~
+
+~if NUM < "10"~
+fn less_test() -> string {
+    return "Less than 10";
+}
+~endif~
+
+~if NUM >= "5"~
+fn greater_equal_test() -> string {
+    return "Greater or equal to 5";
+}
+~endif~
+
+~if NUM <= "5"~
+fn less_equal_test() -> string {
+    return "Less or equal to 5";
+}
+~endif~
+
+~define FLAG1 "true"~
+~define FLAG2 "false"~
+~if FLAG1 == "true" && FLAG2 == "false"~
+fn and_test() -> string {
+    return "Both conditions true";
+}
+~endif~
+
+~if FLAG1 == "false" || FLAG2 == "false"~
+fn or_test() -> string {
+    return "At least one condition true";
+}
+~endif~
