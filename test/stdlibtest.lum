@@ -1,0 +1,43 @@
+use stdlib/io;
+fn main() -> i32 {
+  print("Hello from stdlibtest.lum!\n");
+  println("This is a new line.");
+  eprintln("This is an error message.");
+  let test_dir: string = "./test_dir";
+  let test_file: string = "./test_dir/test_file.txt";
+  let file_content: string = "Hello file system!";
+  make_dir(test_dir);
+  if (is_dir(test_dir)) {
+    println("Directory created successfully.");
+  } else {
+    eprintln("Failed to create directory.");
+  }
+
+  filewrite(test_file, file_content);
+  if (fileexists(test_file)) {
+    println("File created successfully.");
+    let read_content: string = fileread(test_file);
+    println("File size: " + stringof(get_file_size(test_file)));
+  } else {
+    eprintln("Failed to create file.");
+  }
+
+  delete_file(test_file);
+  if (!fileexists(test_file)) {
+    println("File deleted successfully.");
+  } else {
+    eprintln("Failed to delete file.");
+  }
+
+  remove_dir(test_dir);
+  if (!is_dir(test_dir)) {
+    println("Directory deleted successfully.");
+  } else {
+    eprintln("Failed to delete directory.");
+  }
+
+  print("Enter something: ");
+  let input: string = readln();
+  println("You entered: " + input);
+  return 0;
+}
