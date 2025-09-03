@@ -9,7 +9,7 @@ struct Player {
   name: string;
 }
 
-fn main(): i32 {
+fn main() -> i32 {
     let v: Vector2 = Vector2 {x: i32of(10), y: i32of(20)};
     let p: Player = Player { position: v, name: "hi" };
     println(stringof(p.name)); // hi

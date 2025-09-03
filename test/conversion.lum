@@ -1,6 +1,5 @@
-ext fn puts(string): i32;
-
-fn main(): i32 {
+ext fn puts(string) -> i32;
+fn main() -> i32 {
     let i32_val: i32 = 123;
     let i64_val: i64 = 456789012345;
     let f64_val: f64 = 3.14159;

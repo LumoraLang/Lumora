@@ -1,4 +1,4 @@
-fn main(): i32 {
+fn main() -> i32 {
     // This is a single-line comment
     let x: i64 = 10; /* multi
                         line */

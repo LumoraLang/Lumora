@@ -1,5 +1,5 @@
-ext fn puts(string): i32;
-fn main(): i32 {
+ext fn puts(string) -> i32;
+fn main() -> i32 {
     let count: i32 = arg_count();
     puts("Argument count: ");
     puts(stringof(count - i32of(1)) + "\n");

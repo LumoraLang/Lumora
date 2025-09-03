@@ -189,7 +189,7 @@ impl Parser {
         }
 
         self.expect(&Token::RightParen)?;
-        self.expect(&Token::Colon)?;
+        self.expect(&Token::Arrow)?;
         let return_type = self.parse_type()?;
         self.expect(&Token::LeftBrace)?;
         let mut body = Vec::new();
@@ -248,7 +248,7 @@ impl Parser {
         }
 
         self.expect(&Token::RightParen)?;
-        self.expect(&Token::Colon)?;
+        self.expect(&Token::Arrow)?;
         let return_type = self.parse_type()?;
         self.expect(&Token::Semicolon)?;
 

@@ -1,5 +1,5 @@
 use lib;
-fn main(): i32 {
+fn main() -> i32 {
     let s: string = null;
     let t: string = "hello";
     if s == null {

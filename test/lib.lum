@@ -1,4 +1,4 @@
-ext fn printf(string): i32;
-exp fn print(s string): i32 {
+ext fn printf(string) -> i32;
+exp fn print(s string) -> i32 {
     return printf(s);
 }

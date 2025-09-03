@@ -1,5 +1,5 @@
 use stdlib/io;
-fn main(): i32 {
+fn main() -> i32 {
     let p: &i32? = null; // should be allowed
     let q: &i64 = &10; // non-nullable pointer
     let r: &i64? = q; // pointer to nullable pointer (safe)

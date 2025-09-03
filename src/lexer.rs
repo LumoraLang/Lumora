@@ -1,5 +1,4 @@
 use logos::{Lexer, Logos};
-
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {
     #[regex(r"[ \t\n\f]+", logos::skip)]
@@ -107,6 +106,8 @@ pub enum Token {
     Colon,
     #[token("::")]
     DoubleColon,
+    #[token("->")]
+    Arrow,
     #[token(".")]
     Dot,
     #[regex(r"-?[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?", |lex| lex.slice().parse().ok())]
