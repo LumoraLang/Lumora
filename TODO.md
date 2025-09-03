@@ -7,3 +7,4 @@
 - [x] ~fix using nested structs (using, not defining or assigning) causes the compiler to panic~  (done)
 - [x] pointers and null things
 - [x] ~enums and structs~
+- [x] ~preprocessor~
