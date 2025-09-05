@@ -15,9 +15,9 @@ external_dependencies:
 - .lumora/stdlib/native/**/*.c
 - .lumora/stdlib/native/**/*.o
 linker_settings:
-  libraries: 
-    - "raylib"
-    - "m"
+  libraries:
+  - raylib
+  - m
   flags: []
 test_settings:
   run_tests_on_build: true
@@ -26,4 +26,5 @@ dependencies:
 - name: stdlib
   source: LumoraLang/stdlib
   path: .lumora/stdlib
-  version: 16deae2ec75ea6807a3f8b15c3afcd857eba2b88
+  version: 04ce613011735eba78372a0836bcba6283b9b573
+  version_req: ''

@@ -1,0 +1,5 @@
+dependencies:
+- name: stdlib
+  source: LumoraLang/stdlib
+  path: .lumora/stdlib
+  version: 04ce613011735eba78372a0836bcba6283b9b573

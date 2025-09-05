@@ -120,6 +120,8 @@ pub struct Dependency {
     pub source: String,
     pub path: String,
     pub version: String,
+    #[serde(default)]
+    pub version_req: String,
 }
 
 impl Default for LumoraConfig {
@@ -147,6 +149,44 @@ fn default_version() -> String {
 }
 fn default_description() -> String {
     "A Lumora project.".to_string()
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct LockedDependency {
+    pub name: String,
+    pub source: String,
+    pub path: String,
+    pub version: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Default)]
+pub struct LockFile {
+    pub dependencies: Vec<LockedDependency>,
+}
+
+pub fn load_lockfile(path: &str) -> Result<LockFile, io::Error> {
+    if !PathBuf::from(path).exists() {
+        return Ok(LockFile::default());
+    }
+    let content = fs::read_to_string(path)?;
+    let lockfile: LockFile = serde_yaml::from_str(&content).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Failed to parse {}: {}", path, e),
+        )
+    })?;
+    Ok(lockfile)
+}
+
+pub fn save_lockfile(path: &str, lockfile: &LockFile) -> Result<(), io::Error> {
+    let content = serde_yaml::to_string(lockfile).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Failed to serialize lockfile to YAML: {}", e),
+        )
+    })?;
+    fs::write(path, content)?;
+    Ok(())
 }
 
 pub fn load_config(path: &str) -> Result<LumoraConfig, io::Error> {

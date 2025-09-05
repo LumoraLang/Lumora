@@ -12,10 +12,28 @@ use lumora::type_checker::TypeChecker;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
+use std::io::Write;
+
+fn print_colored(text: &str, color: Color, bold: bool) -> std::io::Result<()> {
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    stdout.set_color(ColorSpec::new().set_fg(Some(color)).set_bold(bold))?;
+    write!(&mut stdout, "{}", text)?;
+    stdout.reset()?;
+    Ok(())
+}
+
+fn println_colored(text: &str, color: Color, bold: bool) -> std::io::Result<()> {
+    let mut stdout = StandardStream::stdout(ColorChoice::Auto);
+    stdout.set_color(ColorSpec::new().set_fg(Some(color)).set_bold(bold))?;
+    writeln!(&mut stdout, "{}", text)?;
+    stdout.reset()?;
+    Ok(())
+}
 
 fn main() {
     if let Err(e) = run() {
-        eprintln!("error: {}", e);
+        println_colored(&format!("error: {}", e), Color::Red, true).expect("Failed to print colored error");
         if let Some(span) = match &e {
             LumoraError::ParseError { span, .. } => span.as_ref(),
             LumoraError::TypeError { span, .. } => span.as_ref(),
@@ -23,18 +41,30 @@ fn main() {
             LumoraError::PreprocessorError { span, .. } => span.as_ref(),
             LumoraError::ConfigurationError { .. } => None,
         } {
-            eprintln!(
-                "     --> {}:{}:{}",
-                span.file, span.start_line, span.start_column
-            );
+            println_colored(
+                &format!(
+                    "     --> {}:{}:{}",
+                    span.file, span.start_line, span.start_column
+                ),
+                Color::Cyan,
+                false,
+            ).expect("Failed to print colored span info");
             if let Some(snippet) = &span.snippet {
-                eprintln!("      |");
-                eprintln!("{:4}  | {}", span.start_line, snippet.as_str());
-                eprintln!(
-                    "      | {}{}",
-                    " ".repeat(span.start_column - 1),
-                    "^".repeat(span.end_column - span.start_column)
-                );
+                println_colored("      |", Color::Cyan, false).expect("Failed to print colored line separator");
+                println_colored(
+                    &format!("{:4}  | {}", span.start_line, snippet.as_str()),
+                    Color::White,
+                    false,
+                ).expect("Failed to print colored snippet");
+                println_colored(
+                    &format!(
+                        "      | {}{}",
+                        " ".repeat(span.start_column - 1),
+                        "^".repeat(span.end_column - span.start_column)
+                    ),
+                    Color::Green,
+                    false,
+                ).expect("Failed to print colored caret");
             }
         }
         if let Some(help) = match &e {
@@ -44,7 +74,7 @@ fn main() {
             LumoraError::PreprocessorError { help, .. } => help.as_ref(),
             LumoraError::ConfigurationError { help, .. } => help.as_ref(),
         } {
-            eprintln!("help: {}", help);
+            println_colored(&format!("help: {}", help), Color::Yellow, false).expect("Failed to print colored help message");
         }
         std::process::exit(1);
     }

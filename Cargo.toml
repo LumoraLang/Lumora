@@ -15,3 +15,5 @@ clap = { version = "4.5.11", features = ["derive"] }
 dirs = "5.0.1"
 indicatif = "0.17.8"
 glob = "0.3.1"
+termcolor = "1.4.1"
+cli-table = "0.4.7"
