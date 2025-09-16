@@ -14,6 +14,7 @@ pub enum Token {
     #[token("else")]
     Else,
     #[token("return")]
+    #[token("-->")]
     Return,
     #[token("use")]
     Use,
