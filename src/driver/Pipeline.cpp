@@ -107,7 +107,7 @@ CompileResult Pipeline::compileFile(const std::filesystem::path &srcPath) {
 
   log(std::format("compiling: {}", srcPath.string()));
 
-  Lexer lex(src, srcPath.string());
+  Lexer lex(src, result.sourceFile);
 
   if (m_opts.dumpTokens) {
     auto tokens = lex.tokenizeAll();

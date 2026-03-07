@@ -5,6 +5,8 @@
 #include <vector>
 #include <functional>
 #include <span>
+#include <list>
+#include <unordered_set>
 
 namespace lumora {
 
@@ -34,6 +36,9 @@ private:
 
     std::vector<LexerExtensionPoint> m_extensions;
     std::vector<Token>               m_peekBuf;
+    std::list<std::string>           m_includedFiles;
+    std::unordered_set<std::string>  m_includedSet;
+    std::vector<Token>               m_injected;
 
     Token        advance();
     Token        lexIdOrKeyword();

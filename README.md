@@ -37,13 +37,11 @@ Lumora is a modern, statically-typed programming language compiler built with C+
 ### Build Instructions
 
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+cmake -S . -B build
+make -j$(nproc) -C build
 ```
 
-This will produce the `lumorac` compiler executable.
+This will produce the `lumorac` compiler executable at `build/`.
 
 ## Usage
 
@@ -112,3 +110,6 @@ output = "build/myapp"
 libs   = ["c", "m"]
 flags  = ["-no-pie"]
 ```
+
+# Licensing
+Lumora is fully free and open-source, released under the [Apache 2.0 License](LICENSE).
