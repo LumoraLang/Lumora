@@ -124,7 +124,6 @@ pub fn main() -> i32 {
     let x: i64 = 42;
     let y: i64 = -17;
     let z  = x + abs(y);
-
     let clamped = clamp(z, 0, 100);
     let fact    = factorial(10);
     let fib     = fibonacci(20);
@@ -133,22 +132,17 @@ pub fn main() -> i32 {
     let g       = gcd(48, 18);
     let p       = pow(2, 16);
     let primes  = count_primes(1000);
-
     let flag: bool = is_prime(97);
     let neg: i64   = -(x * 2);
     let bits: i64  = x & 0xFF;
     let shifted    = x << 2;
     let combined   = (x | y) ^ z;
-
     let as_f64 = x as f64;
     let back   = as_f64 as i64;
-
     let ptr: *i64 = &x;
     let deref: i64 = *ptr;
-
     let inner  = |a: i64, b: i64| a * b + 1;
     let result = factorial(clamp(gcd(p, primes), 1, 12));
-
     if result > 1000 {
         let msg = "large result\n";
         printf(msg);
