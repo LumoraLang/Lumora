@@ -1,15 +1,17 @@
 @include "raylib.lmi"
-pub fn main() -> i32 {
+pub fn main() -> i64 {
     const RAYWHITE: i32 = 0xFFFFFFFF;
     const RED:      i32 = 0xFF0000FF;
-    InitWindow(800 as i32, 600 as i32, "Lumora + Raylib demo");
+    const width: i32 = 800;
+    const height: i32 = 600;
+    InitWindow(width, height, "Lumora + Raylib demo");
     while !WindowShouldClose() {
         BeginDrawing();
         ClearBackground(RAYWHITE);
-        DrawText("Hello from Lumora!", 200 as i32, 200 as i32, 20 as i32, RED);
+        DrawText("Hello from Lumora!", 10, 10, 20 as i32, RED);
         EndDrawing();
     }
 
     CloseWindow();
-    return 0 as i32;
+    return 0;
 }
