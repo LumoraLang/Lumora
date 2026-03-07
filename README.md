@@ -1,0 +1,114 @@
+```
+#########                               
+#########                               
+#########                               
+#########                               
+#########                               
+#########                               
+#########                               
+#########                               
+#######                                 
+####  .#####         #                  
+## ############*    ##                  
+# ####################                  
+#####################                   
+#*      ############                    
+#          #######                      
+```
+
+# Lumora
+
+Lumora is a modern, statically-typed programming language compiler built with C++ and LLVM. It features a powerful extension system allowing for custom syntax extensions and macros via dynamically loaded shared libraries.
+
+## Features
+
+- **LLVM Backend:** Generates high-performance native code using LLVM IR.
+- **Extension System:** Supports compiler plugins (macros) loaded at runtime (e.g., `@log`, `@assert`).
+- **Configuration Driven:** Build settings managed via `lumora.conf`.
+- **Modern Syntax:** clean, expression-oriented syntax.
+
+## Building from Source
+
+### Prerequisites
+- CMake 3.20+
+- C++23 compatible compiler (GCC/Clang)
+- LLVM/Clang development libraries
+
+### Build Instructions
+
+```bash
+mkdir build
+cd build
+cmake ..
+make
+```
+
+This will produce the `lumorac` compiler executable.
+
+## Usage
+
+### Basic Compilation
+
+To compile a Lumora source file:
+
+```bash
+./build/lumorac example/main.lm
+```
+
+This will generate an executable in the `build/` directory (e.g., `build/myapp`).
+
+### Command Line Options
+
+```
+Usage: ./lumorac [options] [files...]
+
+Options:
+  --conf <file>     Use specified lumora.conf (default: lumora.conf)
+  --dump-tokens     Print tokens and exit
+  --dump-ast        Print AST and exit
+  --dump-ir         Print generated LLVM IR
+  --stop-ir         Stop after IR emission (no opt/link)
+  --no-opt          Skip optimization steps
+  --verbose         Verbose build output
+  --ext-dir <dir>   Load extensions from directory
+  --output <dir>    Override output directory
+  -h, --help        Print help message
+```
+
+## Extensions
+
+Lumora supports extensions that can hook into the parser, semantic analyzer, and code generator. 
+
+The example extension provided in `extensions/example` implements:
+- `@log(args...)`: Prints formatted output to stdout.
+- `@assert(condition, message)`: Asserts a condition, terminating the program if false.
+
+To use extensions, ensure they are built (enabled by default with `LUMORA_BUILD_EXTENSIONS`) and referenced in your `lumora.conf` or via `--ext-dir`.
+
+## Configuration
+
+The build process is controlled by `lumora.conf`.
+
+Example `lumora.conf`:
+```toml
+name = "myapp"
+version = "0.1.0"
+output_dir = "build"
+
+[extensions]
+dir = "build/extensions/example"
+
+[source.main]
+files = ["example/main.lm"]
+
+[opt.release]
+level = "O2"
+passes = ["mem2reg", "instcombine", "simplifycfg", "gvn"]
+
+[link.binary]
+linker = "clang"
+inputs = ["build/main.opt.ll"]
+output = "build/myapp"
+libs   = ["c", "m"]
+flags  = ["-no-pie"]
+```

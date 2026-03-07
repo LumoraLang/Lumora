@@ -1,0 +1,175 @@
+extern "C" {
+    fn printf(fmt: *u8, ...) -> i32;
+    fn malloc(size: u64) -> *void;
+    fn free(ptr: *void);
+    fn exit(code: i32);
+}
+
+struct Vec3 {
+    x: f64,
+    y: f64,
+    z: f64,
+}
+
+struct Player {
+    health: i32,
+    score:  i64,
+    alive:  bool,
+}
+
+enum Direction {
+    North = 0,
+    South = 1,
+    East  = 2,
+    West  = 3,
+}
+
+enum Shape {
+    Circle(f64),
+    Rect(f64, f64),
+    Triangle(f64, f64, f64),
+}
+
+fn clamp(val: i64, lo: i64, hi: i64) -> i64 {
+    if val < lo { return lo; }
+    if val > hi { return hi; }
+    return val;
+}
+
+fn factorial(n: i64) -> i64 {
+    if n <= 1 { return 1; }
+    return n * factorial(n - 1);
+}
+
+fn fibonacci(n: i64) -> i64 {
+    let mut a: i64 = 0;
+    let mut b: i64 = 1;
+    let mut i: i64 = 0;
+    while i < n {
+        let tmp = a + b;
+        a = b;
+        b = tmp;
+        i = i + 1;
+    }
+    return a;
+}
+
+fn sum_array(len: i64) -> i64 {
+    let mut total: i64 = 0;
+    for i in len {
+        total = total + i;
+    }
+    return total;
+}
+
+fn abs(x: i64) -> i64 {
+    if x < 0 { return -x; }
+    return x;
+}
+
+fn max(a: i64, b: i64) -> i64 {
+    if a > b { return a; }
+    return b;
+}
+
+fn min(a: i64, b: i64) -> i64 {
+    if a < b { return a; }
+    return b;
+}
+
+fn is_prime(n: i64) -> bool {
+    if n < 2 { return false; }
+    let mut i: i64 = 2;
+    while i * i <= n {
+        if n % i == 0 { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+fn gcd(a: i64, b: i64) -> i64 {
+    let mut x = a;
+    let mut y = b;
+    while y != 0 {
+        let tmp = x % y;
+        x = y;
+        y = tmp;
+    }
+    return x;
+}
+
+fn pow(base: i64, exp: i64) -> i64 {
+    let mut result: i64 = 1;
+    let mut e = exp;
+    let mut b = base;
+    while e > 0 {
+        if e % 2 == 1 { result = result * b; }
+        b = b * b;
+        e = e / 2;
+    }
+    return result;
+}
+
+fn count_primes(limit: i64) -> i64 {
+    let mut count: i64 = 0;
+    let mut n: i64 = 2;
+    while n < limit {
+        if is_prime(n) { count = count + 1; }
+        n = n + 1;
+    }
+    return count;
+}
+
+pub fn main() -> i32 {
+    let x: i64 = 42;
+    let y: i64 = -17;
+    let z  = x + abs(y);
+
+    let clamped = clamp(z, 0, 100);
+    let fact    = factorial(10);
+    let fib     = fibonacci(20);
+    let total   = sum_array(100);
+    let biggest = max(fact, fib);
+    let g       = gcd(48, 18);
+    let p       = pow(2, 16);
+    let primes  = count_primes(1000);
+
+    let flag: bool = is_prime(97);
+    let neg: i64   = -(x * 2);
+    let bits: i64  = x & 0xFF;
+    let shifted    = x << 2;
+    let combined   = (x | y) ^ z;
+
+    let as_f64 = x as f64;
+    let back   = as_f64 as i64;
+
+    let ptr: *i64 = &x;
+    let deref: i64 = *ptr;
+
+    let inner  = |a: i64, b: i64| a * b + 1;
+    let result = factorial(clamp(gcd(p, primes), 1, 12));
+
+    if result > 1000 {
+        let msg = "large result\n";
+        printf(msg);
+    } else {
+        let msg = "small result\n";
+        printf(msg);
+    }
+
+    let mut counter: i64 = 0;
+    while counter < 10 {
+        counter = counter + 1;
+    }
+
+    for i in 5 {
+        let sq = i * i;
+        counter = counter + sq;
+    }
+
+    defer free(malloc(64 as u64));
+    let x: i64 = 42;
+    let y: i64 = 100;
+    @assert(x > y, "x should not be greater than y");
+    return 0 as i32;
+}

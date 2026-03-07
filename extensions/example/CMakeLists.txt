@@ -1,0 +1,9 @@
+cmake_minimum_required(VERSION 3.20)
+project(lumora_ext_log CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+
+add_library(lumora_ext_log SHARED log_ext.cpp)
+target_include_directories(lumora_ext_log PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_compile_options(lumora_ext_log PRIVATE -Wall -O2)
+set_target_properties(lumora_ext_log PROPERTIES PREFIX "")
