@@ -164,6 +164,7 @@ pub fn main() -> i32 {
     defer free(malloc(64 as u64));
     let x: i64 = 42;
     let y: i64 = 100;
+    printf("\e[31mHello from Lumora!\e[0m\n");
     @assert(x > y, "x should not be greater than y");
     return 0 as i32;
 }

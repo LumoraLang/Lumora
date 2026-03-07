@@ -569,6 +569,8 @@ IRValue IREmitter::emitStringLit(StringLit &e) {
       escaped += "\\0A";
     else if (c == '\t')
       escaped += "\\09";
+    else if (c == '\033')
+      escaped += "\\1B";
     else if (c == '\\')
       escaped += "\\5C";
     else if (c == '"')

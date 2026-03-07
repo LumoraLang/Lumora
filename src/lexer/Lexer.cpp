@@ -191,6 +191,7 @@ Token Lexer::lexString() {
                 case 'n':  val += '\n'; break;
                 case 't':  val += '\t'; break;
                 case 'r':  val += '\r'; break;
+                case 'e':  val += '\033'; break;
                 case '\\': val += '\\'; break;
                 case '"':  val += '"';  break;
                 case '0':  val += '\0'; break;
@@ -216,6 +217,7 @@ Token Lexer::lexChar() {
             case 'n': val = '\n'; break;
             case 't': val = '\t'; break;
             case 'r': val = '\r'; break;
+            case 'e': val = '\033'; break;
             case '0': val = '\0'; break;
             default:  val = '?';  break;
         }
