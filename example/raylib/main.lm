@@ -11,11 +11,11 @@ extern "C" {
 pub fn main() -> i32 {
     const RAYWHITE: i32 = 0xFFFFFFFF;
     const RED:      i32 = 0xFF0000FF;
-    InitWindow(800, 600, "Lumora + Raylib demo");
+    InitWindow(800 as i32, 600 as i32, "Lumora + Raylib demo");
     while !WindowShouldClose() {
         BeginDrawing();
         ClearBackground(RAYWHITE);
-        DrawText("Hello from Lumora!", 200, 200, 20, RED);
+        DrawText("Hello from Lumora!", 200 as i32, 200 as i32, 20 as i32, RED);
         EndDrawing();
     }
 
