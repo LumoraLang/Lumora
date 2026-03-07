@@ -479,9 +479,8 @@ Token Lexer::advance() {
         std::string incPath = std::get<std::string>(pathTok.extra);
         std::filesystem::path currentPath(m_file);
         auto fullPath =
-            std::filesystem::weakly_canonical(currentPath.parent_path() / incPath);
+            (currentPath.parent_path() / incPath).lexically_normal();
         std::string canonical = fullPath.string();
-
         if (m_includedSet.count(canonical)) {
           throw std::runtime_error(
               std::format("{}:{}:{}: circular include detected for '{}'",
