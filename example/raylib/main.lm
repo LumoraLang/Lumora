@@ -8,9 +8,9 @@ extern "C" {
     fn DrawText(text: &u8, x: i32, y: i32, fontSize: i32, color: i32);
 }
 
-const RAYWHITE = 0xFFFFFFFF;
-const RED      = 0xFF0000FF;
 pub fn main() -> i32 {
+    const RAYWHITE: i32 = 0xFFFFFFFF;
+    const RED:      i32 = 0xFF0000FF;
     InitWindow(800, 600, "Lumora + Raylib demo");
     while !WindowShouldClose() {
         BeginDrawing();
@@ -20,5 +20,5 @@ pub fn main() -> i32 {
     }
 
     CloseWindow();
-    return 0;
+    return 0 as i32;
 }

@@ -111,6 +111,13 @@ void Sema::analyzeItem(Node& n) {
     switch (n.kind) {
         case NodeKind::FnDecl:     analyzeFn(static_cast<FnDecl&>(n));         break;
         case NodeKind::StructDecl: analyzeStruct(static_cast<StructDecl&>(n)); break;
+        case NodeKind::ExternDecl: {
+            auto& ext = static_cast<ExternDecl&>(n);
+            for (auto& item : ext.items) {
+                if (item) analyzeItem(*item);
+            }
+            break;
+        }
         case NodeKind::ExtensionNode: analyzeExpr(n);                          break;
         default: break;
     }
@@ -187,6 +194,7 @@ void Sema::analyzeFn(FnDecl& fn) {
     for (auto& p : fn.params) {
         auto paramTy = p->ty ? resolveTypeNode(*p->ty) : SemaType::voidTy();
         currentScope().define(Symbol{p->name, paramTy, p->isMut, false, p.get()});
+        fnType->params.push_back(paramTy);
     }
 
     if (fn.body) analyzeBlock(static_cast<BlockStmt&>(*fn.body));
@@ -309,8 +317,11 @@ TypeRef Sema::analyzeExpr(Node& n) {
         }
         case NodeKind::CallExpr: {
             auto& c = static_cast<CallExpr&>(n);
-            analyzeExpr(*c.callee);
+            auto calleeTy = analyzeExpr(*c.callee);
             for (auto& a : c.args) analyzeExpr(*a);
+            if (calleeTy && calleeTy->kind == TypeKind::Fn && calleeTy->ret) {
+                return calleeTy->ret;
+            }
             return SemaType::voidTy();
         }
         case NodeKind::FieldExpr: {

@@ -581,9 +581,21 @@ IRValue IREmitter::emitCallExpr(CallExpr& e) {
         argStr += llvmType(argVals[i].type) + " " + argVals[i].reg;
     }
 
-    auto reg = newReg();
-    emitToCurrentBlock(std::format("{} = call i64 @{}({})", reg, calleeName, argStr));
-    return {reg, SemaType::i64Ty(), false};
+    auto calleeTy = m_sema.inferExpr(*e.callee);
+    TypeRef retTy = SemaType::voidTy();
+    if (calleeTy && calleeTy->kind == TypeKind::Fn && calleeTy->ret) {
+        retTy = calleeTy->ret;
+    }
+    std::string retStr = llvmType(retTy);
+
+    if (retTy->kind == TypeKind::Void) {
+        emitToCurrentBlock(std::format("call void @{}({})", calleeName, argStr));
+        return {newReg(), retTy, false};
+    } else {
+        auto reg = newReg();
+        emitToCurrentBlock(std::format("{} = call {} @{}({})", reg, retStr, calleeName, argStr));
+        return {reg, retTy, false};
+    }
 }
 
 IRValue IREmitter::emitCastExpr(CastExpr& e) {
