@@ -1,14 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
-
 add_executable(test_lexer test_lexer.cpp)
 target_link_libraries(test_lexer PRIVATE lumora_core)
-
 add_executable(test_parser test_parser.cpp)
 target_link_libraries(test_parser PRIVATE lumora_core)
-
 add_executable(test_codegen test_codegen.cpp)
 target_link_libraries(test_codegen PRIVATE lumora_core dl)
-
+add_executable(repl repl.cpp)
+target_link_libraries(repl PRIVATE lumora_core dl)
 add_test(NAME lexer  COMMAND test_lexer)
 add_test(NAME parser COMMAND test_parser)
 add_test(NAME codegen COMMAND test_codegen)
