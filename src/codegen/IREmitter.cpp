@@ -557,7 +557,10 @@ IRValue IREmitter::emitIntLit(IntLit &e) {
 }
 
 IRValue IREmitter::emitFloatLit(FloatLit &e) {
-  return {std::format("{:.17g}", e.value), SemaType::f64Ty(), false};
+  auto s = std::format("{:.17g}", e.value);
+  if (s.find('.') == std::string::npos && s.find('e') == std::string::npos && s.find('E') == std::string::npos)
+    s += ".0";
+  return {s, SemaType::f64Ty(), false};
 }
 
 IRValue IREmitter::emitStringLit(StringLit &e) {
