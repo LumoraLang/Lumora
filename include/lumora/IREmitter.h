@@ -4,6 +4,7 @@
 #include <string>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 #include <functional>
 #include <optional>
@@ -80,6 +81,7 @@ private:
     std::unordered_map<std::string, IRValue>  m_locals;
     std::unordered_map<std::string, IRValue>  m_globals;
     std::vector<std::string>                  m_stringLits;
+    std::unordered_set<std::string>           m_declaredFns;
 
     void        emitModule(ast::Module& mod);
     void        emitTopLevel(ast::Node& n);
@@ -126,6 +128,7 @@ private:
 
     void        flushFn(const std::string& name, const std::string& retTy,
                         const std::vector<std::string>& paramStrs, bool isVararg);
+    void        ensureDeclared(const std::string& decl);
 };
 
 } 

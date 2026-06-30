@@ -43,6 +43,7 @@ struct SemaType {
     [[nodiscard]] bool isFloat()  const noexcept;
     [[nodiscard]] bool isNumeric()const noexcept;
     [[nodiscard]] bool isPtr()    const noexcept;
+    [[nodiscard]] bool isString() const noexcept;
     [[nodiscard]] bool isBool()   const noexcept;
     [[nodiscard]] std::string str() const;
 };

@@ -181,6 +181,9 @@ void IREmitter::emitModule(Module &mod) {
       emitTopLevel(*item);
   }
 
+  for (auto &d : m_declaredFns)
+    m_out << d << "\n";
+
   for (size_t i = 0; i < m_stringLits.size(); ++i) {
     m_out << m_stringLits[i] << "\n";
   }
@@ -254,6 +257,10 @@ void IREmitter::emitExternDecl(ExternDecl &ext) {
     }
   }
   m_out << "\n";
+}
+
+void IREmitter::ensureDeclared(const std::string &decl) {
+  m_declaredFns.insert(decl);
 }
 
 void IREmitter::emitFnDecl(FnDecl &fn) {
@@ -619,11 +626,35 @@ IRValue IREmitter::emitIdentExpr(IdentExpr &e) {
 IRValue IREmitter::emitBinaryExpr(BinaryExpr &e) {
   auto lhs = emitExpr(*e.lhs);
   auto rhs = emitExpr(*e.rhs);
-
   auto ty = lhs.type ? lhs.type : SemaType::i64Ty();
+  if (e.op == TokenKind::Plus && ty && ty->isString()) {
+    auto r1 = newReg();
+    auto r2 = newReg();
+    auto r3 = newReg();
+    auto r4 = newReg();
+    auto r5 = newReg();
+    auto r6 = newReg();
+    auto r7 = newReg();
+    auto r8 = newReg();
+    auto r9 = newReg();
+    ensureDeclared("declare i64 @strlen(i8* nocapture readonly)");
+    ensureDeclared("declare i8* @malloc(i64)");
+    ensureDeclared("declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture writeonly, i8* nocapture readonly, i64, i1 immarg)");
+    emitToCurrentBlock(std::format("{} = call i64 @strlen(i8* {})", r1, lhs.reg));
+    emitToCurrentBlock(std::format("{} = call i64 @strlen(i8* {})", r2, rhs.reg));
+    emitToCurrentBlock(std::format("{} = add i64 {}, {}", r3, r1, r2));
+    emitToCurrentBlock(std::format("{} = add i64 {}, 1", r4, r3));
+    emitToCurrentBlock(std::format("{} = call i8* @malloc(i64 {})", r5, r4));
+    emitToCurrentBlock(std::format("call void @llvm.memcpy.p0i8.p0i8.i64(i8* {}, i8* {}, i64 {}, i1 false)", r5, lhs.reg, r1));
+    emitToCurrentBlock(std::format("{} = getelementptr i8, i8* {}, i64 {}", r6, r5, r1));
+    emitToCurrentBlock(std::format("call void @llvm.memcpy.p0i8.p0i8.i64(i8* {}, i8* {}, i64 {}, i1 false)", r6, rhs.reg, r2));
+    emitToCurrentBlock(std::format("{} = getelementptr i8, i8* {}, i64 {}", r7, r6, r2));
+    emitToCurrentBlock(std::format("store i8 0, i8* {}", r7));
+    return {r5, SemaType::ptrTy(SemaType::u8Ty()), false};
+  }
+
   auto tyStr = llvmType(ty);
   auto reg = newReg();
-
   bool isFloat = ty->isFloat();
   bool isSigned = ty->kind == TypeKind::I8 || ty->kind == TypeKind::I16 ||
                   ty->kind == TypeKind::I32 || ty->kind == TypeKind::I64 ||

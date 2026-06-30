@@ -469,6 +469,39 @@ Token Lexer::advance() {
     skipWhitespaceAndComments();
     if (cur() == '\0')
       return makeToken(TokenKind::Eof, "", makeLoc());
+    if (m_pos + 6 <= m_src.size() && m_src.substr(m_pos, 6) == "@embed") {
+      auto loc = makeLoc();
+      for (int i = 0; i < 6; ++i)
+        eat();
+      skipWhitespaceAndComments();
+      if (cur() == '"') {
+        auto pathTok = lexString();
+        std::string embedPath = std::get<std::string>(pathTok.extra);
+        std::filesystem::path currentPath(m_file);
+        auto fullPath =
+            (currentPath.parent_path() / embedPath).lexically_normal();
+        std::string canonical = fullPath.string();
+        std::ifstream f(fullPath);
+        if (f) {
+          std::stringstream ss;
+          ss << f.rdbuf();
+          std::string content = ss.str();
+          auto tok = makeToken(TokenKind::LitString, "", loc);
+          tok.extra = content;
+          m_injected.push_back(tok);
+          continue;
+        } else {
+          throw std::runtime_error(
+              std::format("{}:{}:{}: cannot open embedded file '{}'", m_file,
+                          loc.line, loc.col, fullPath.string()));
+        }
+      } else {
+        throw std::runtime_error(
+            std::format("{}:{}:{}: expected string literal after @embed",
+                        m_file, loc.line, loc.col));
+      }
+    }
+
     if (m_pos + 8 <= m_src.size() && m_src.substr(m_pos, 8) == "@include") {
       auto loc = makeLoc();
       for (int i = 0; i < 8; ++i)

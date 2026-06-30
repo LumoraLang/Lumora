@@ -79,6 +79,10 @@ bool SemaType::isPtr() const noexcept {
   return kind == TypeKind::Pointer || kind == TypeKind::Reference;
 }
 bool SemaType::isBool() const noexcept { return kind == TypeKind::Bool; }
+bool SemaType::isString() const noexcept {
+  return (kind == TypeKind::Pointer || kind == TypeKind::Reference) &&
+         inner && inner->kind == TypeKind::U8;
+}
 
 std::string SemaType::str() const { return name; }
 
@@ -388,6 +392,8 @@ TypeRef Sema::analyzeExpr(Node &n) {
         b.op == TokenKind::LtEq || b.op == TokenKind::GtEq ||
         b.op == TokenKind::AmpAmp || b.op == TokenKind::PipePipe)
       return SemaType::boolTy();
+    if (b.op == TokenKind::Plus && lty && lty->isString() && rty && rty->isString())
+      return lty;
     return lty ? lty : rty;
   }
   case NodeKind::UnaryExpr: {
