@@ -774,9 +774,9 @@ IRValue IREmitter::emitCastExpr(CastExpr &e) {
     emitToCurrentBlock(
         std::format("{} = fpcast {} {} to {}", reg, srcStr, val.reg, dstStr));
   } else if (srcTy->isPtr() && dstTy->isPtr()) {
-    emitToCurrentBlock(std::format("{} = bitcast {}* {} to {}*", reg,
-                                   llvmType(srcTy->inner), val.reg,
-                                   llvmType(dstTy->inner)));
+    emitToCurrentBlock(std::format("{} = bitcast {} {} to {}", reg,
+                                   llvmType(srcTy), val.reg,
+                                   llvmType(dstTy)));
   } else if (srcTy->isInt() && dstTy->isPtr()) {
     emitToCurrentBlock(
         std::format("{} = inttoptr {} {} to {}", reg, srcStr, val.reg, dstStr));
