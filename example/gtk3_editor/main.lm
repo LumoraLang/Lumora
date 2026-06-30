@@ -1,0 +1,188 @@
+@include "gtk3.lmi"
+fn on_window_destroy(obj: *void, data: *void) {
+    let filename = g_object_get_data(obj, "filename");
+    if filename != 0 as *void { g_free(filename); }
+    gtk_main_quit();
+}
+
+fn on_new_activated(obj: *void, data: *void) {
+    let window = data;
+    let buffer = g_object_get_data(window, "text-buffer");
+    gtk_text_buffer_set_text(buffer, "", -1 as i32);
+    gtk_window_set_title(window, "Lumora Text Editor");
+    let old = g_object_get_data(window, "filename");
+    if old != 0 as *void { g_free(old); }
+    g_object_set_data(window, "filename", 0 as *void);
+}
+
+fn do_open_dialog(window: *void) -> *void {
+    let dialog = gtk_dialog_new();
+    gtk_window_set_title(dialog, "Open File");
+    gtk_window_set_transient_for(dialog, window);
+    let chooser = gtk_file_chooser_widget_new(0 as i32);
+    gtk_container_add(gtk_dialog_get_content_area(dialog), chooser);
+    gtk_dialog_add_button(dialog, "_Cancel", -6 as i32);
+    gtk_dialog_add_button(dialog, "_Open", -3 as i32);
+    gtk_widget_show_all(dialog);
+    let response = gtk_dialog_run(dialog);
+    let filename: *void = 0 as *void;
+    if response == -3 as i32 {
+        filename = gtk_file_chooser_get_filename(chooser);
+    }
+    gtk_widget_destroy(dialog);
+    return filename;
+}
+
+fn do_save_dialog(window: *void) -> *void {
+    let dialog = gtk_dialog_new();
+    gtk_window_set_title(dialog, "Save As");
+    gtk_window_set_transient_for(dialog, window);
+    let chooser = gtk_file_chooser_widget_new(1 as i32);
+    gtk_container_add(gtk_dialog_get_content_area(dialog), chooser);
+    gtk_dialog_add_button(dialog, "_Cancel", -6 as i32);
+    gtk_dialog_add_button(dialog, "_Save", -3 as i32);
+    gtk_widget_show_all(dialog);
+    let response = gtk_dialog_run(dialog);
+    let filename: *void = 0 as *void;
+    if response == -3 as i32 {
+        filename = gtk_file_chooser_get_filename(chooser);
+    }
+    gtk_widget_destroy(dialog);
+    return filename;
+}
+
+fn read_file_into_buffer(filename: *void, buffer: *void) -> bool {
+    let f = fopen(filename as &u8, "rb");
+    if f == 0 as *void { return false; }
+    fseek(f, 0 as i64, 2 as i32);
+    let size = ftell(f);
+    fseek(f, 0 as i64, 0 as i32);
+    let buf = malloc(size + 1 as u64);
+    if buf == 0 as *void {
+        fclose(f);
+        return false;
+    }
+    fread(buf, 1 as u64, size as u64, f);
+    fclose(f);
+    gtk_text_buffer_set_text(buffer, buf as &u8, size as i32);
+    free(buf);
+    return true;
+}
+
+fn save_buffer_to_file(filename: *void, buffer: *void) -> bool {
+    let start_iter = malloc(128 as u64);
+    let end_iter = malloc(128 as u64);
+    gtk_text_buffer_get_start_iter(buffer, start_iter);
+    gtk_text_buffer_get_end_iter(buffer, end_iter);
+    let text = gtk_text_buffer_get_text(buffer, start_iter, end_iter, 0 as i32);
+    free(start_iter);
+    free(end_iter);
+    if text == 0 as *void { return false; }
+    let len = strlen(text as &u8);
+    let f = fopen(filename as &u8, "wb");
+    if f == 0 as *void {
+        g_free(text);
+        return false;
+    }
+    fwrite(text as &u8, 1 as u64, len, f);
+    fclose(f);
+    g_free(text);
+    return true;
+}
+
+fn on_open_activated(obj: *void, data: *void) {
+    let window = data;
+    let buffer = g_object_get_data(window, "text-buffer");
+    let filename = do_open_dialog(window);
+    if filename != 0 as *void {
+        let ok = read_file_into_buffer(filename, buffer);
+        if ok {
+            let old = g_object_get_data(window, "filename");
+            if old != 0 as *void { g_free(old); }
+            g_object_set_data(window, "filename", filename);
+        } else {
+            printf("Error opening file\n");
+            g_free(filename);
+        }
+    }
+}
+
+fn on_save_activated(obj: *void, data: *void) {
+    let window = data;
+    let buffer = g_object_get_data(window, "text-buffer");
+    let mut filename = g_object_get_data(window, "filename");
+    if filename == 0 as *void {
+        filename = do_save_dialog(window);
+        if filename == 0 as *void { return; }
+        g_object_set_data(window, "filename", filename);
+    }
+    let ok = save_buffer_to_file(filename, buffer);
+    if ok {
+        printf("File saved\n");
+    } else {
+        printf("Error saving file\n");
+    }
+}
+
+fn on_save_as_activated(obj: *void, data: *void) {
+    let window = data;
+    let buffer = g_object_get_data(window, "text-buffer");
+    let filename = do_save_dialog(window);
+    if filename != 0 as *void {
+        let ok = save_buffer_to_file(filename, buffer);
+        if ok {
+            let old = g_object_get_data(window, "filename");
+            if old != 0 as *void { g_free(old); }
+            g_object_set_data(window, "filename", filename);
+        } else {
+            printf("Error saving file\n");
+            g_free(filename);
+        }
+    }
+}
+
+pub fn main() -> i64 {
+    let argc: i32 = 0;
+    gtk_init(&argc, 0 as **&u8);
+    let window = gtk_window_new(0 as i32);
+    gtk_window_set_default_size(window, 800, 600);
+    gtk_window_set_position(window, 1 as i32);
+    g_signal_connect_data(window, "destroy", on_window_destroy as *void, 0 as *void, 0 as *void, 0 as i32);
+    let vbox = gtk_box_new(1 as i32, 0 as i32);
+    gtk_container_add(window, vbox);
+    let menubar = gtk_menu_bar_new();
+    gtk_box_pack_start(vbox, menubar, 0 as i32, 0 as i32, 0 as u32);
+    let file_item = gtk_menu_item_new_with_label("File");
+    let file_menu = gtk_menu_new();
+    gtk_menu_item_set_submenu(file_item, file_menu);
+    gtk_menu_shell_append(menubar, file_item);
+    let new_item = gtk_menu_item_new_with_label("New");
+    g_signal_connect_data(new_item, "activate", on_new_activated as *void, window, 0 as *void, 0 as i32);
+    gtk_menu_shell_append(file_menu, new_item);
+    let open_item = gtk_menu_item_new_with_label("Open");
+    g_signal_connect_data(open_item, "activate", on_open_activated as *void, window, 0 as *void, 0 as i32);
+    gtk_menu_shell_append(file_menu, open_item);
+    let save_item = gtk_menu_item_new_with_label("Save");
+    g_signal_connect_data(save_item, "activate", on_save_activated as *void, window, 0 as *void, 0 as i32);
+    gtk_menu_shell_append(file_menu, save_item);
+    let save_as_item = gtk_menu_item_new_with_label("Save As...");
+    g_signal_connect_data(save_as_item, "activate", on_save_as_activated as *void, window, 0 as *void, 0 as i32);
+    gtk_menu_shell_append(file_menu, save_as_item);
+    let sep = gtk_separator_menu_item_new();
+    gtk_menu_shell_append(file_menu, sep);
+    let quit_item = gtk_menu_item_new_with_label("Quit");
+    g_signal_connect_data(quit_item, "activate", gtk_main_quit as *void, 0 as *void, 0 as *void, 0 as i32);
+    gtk_menu_shell_append(file_menu, quit_item);
+    let scrolled = gtk_scrolled_window_new(0 as *void, 0 as *void);
+    gtk_scrolled_window_set_policy(scrolled, 1 as i32, 1 as i32);
+    gtk_box_pack_start(vbox, scrolled, 1 as i32, 1 as i32, 0 as u32);
+    let text_view = gtk_text_view_new();
+    gtk_text_view_set_wrap_mode(text_view, 3 as i32);
+    gtk_container_add(scrolled, text_view);
+    let buffer = gtk_text_view_get_buffer(text_view);
+    g_object_set_data(window, "text-buffer", buffer);
+    gtk_text_buffer_set_text(buffer, "Welcome to Lumora Text Editor!\n", -1 as i32);
+    gtk_widget_show_all(window);
+    gtk_main();
+    return 0;
+}
