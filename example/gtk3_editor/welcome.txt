@@ -1,0 +1,10 @@
+Welcome to Lumora Text Editor!
+
+Features:
+- New: Clear the editor
+- Open: Open a file (Ctrl+O)
+- Save: Save current file (Ctrl+S)
+- Save As: Save to a new file
+
+Lumora is a lightweight compiled language with
+C-level FFI and a simple, readable syntax.

@@ -637,8 +637,6 @@ IRValue IREmitter::emitBinaryExpr(BinaryExpr &e) {
     auto r7 = newReg();
     auto r8 = newReg();
     auto r9 = newReg();
-    ensureDeclared("declare i64 @strlen(i8* nocapture readonly)");
-    ensureDeclared("declare i8* @malloc(i64)");
     ensureDeclared("declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture writeonly, i8* nocapture readonly, i64, i1 immarg)");
     emitToCurrentBlock(std::format("{} = call i64 @strlen(i8* {})", r1, lhs.reg));
     emitToCurrentBlock(std::format("{} = call i64 @strlen(i8* {})", r2, rhs.reg));

@@ -1,4 +1,15 @@
 @include "gtk3.lmi"
+fn set_title_with_filename(window: *void, filename: *void) {
+    if filename != 0 as *void {
+        let sep = " — ";
+        let base = "Lumora Text Editor" + sep + (filename as &u8);
+        gtk_window_set_title(window, base as &u8);
+        free(base as *void);
+    } else {
+        gtk_window_set_title(window, "Lumora Text Editor");
+    }
+}
+
 fn on_window_destroy(obj: *void, data: *void) {
     let filename = g_object_get_data(obj, "filename");
     if filename != 0 as *void { g_free(filename); }
@@ -9,10 +20,10 @@ fn on_new_activated(obj: *void, data: *void) {
     let window = data;
     let buffer = g_object_get_data(window, "text-buffer");
     gtk_text_buffer_set_text(buffer, "", -1 as i32);
-    gtk_window_set_title(window, "Lumora Text Editor");
     let old = g_object_get_data(window, "filename");
     if old != 0 as *void { g_free(old); }
     g_object_set_data(window, "filename", 0 as *void);
+    set_title_with_filename(window, 0 as *void);
 }
 
 fn do_open_dialog(window: *void) -> *void {
@@ -100,6 +111,7 @@ fn on_open_activated(obj: *void, data: *void) {
             let old = g_object_get_data(window, "filename");
             if old != 0 as *void { g_free(old); }
             g_object_set_data(window, "filename", filename);
+            set_title_with_filename(window, filename);
         } else {
             printf("Error opening file\n");
             g_free(filename);
@@ -115,6 +127,7 @@ fn on_save_activated(obj: *void, data: *void) {
         filename = do_save_dialog(window);
         if filename == 0 as *void { return; }
         g_object_set_data(window, "filename", filename);
+        set_title_with_filename(window, filename);
     }
     let ok = save_buffer_to_file(filename, buffer);
     if ok {
@@ -134,6 +147,7 @@ fn on_save_as_activated(obj: *void, data: *void) {
             let old = g_object_get_data(window, "filename");
             if old != 0 as *void { g_free(old); }
             g_object_set_data(window, "filename", filename);
+            set_title_with_filename(window, filename);
         } else {
             printf("Error saving file\n");
             g_free(filename);
@@ -181,7 +195,7 @@ pub fn main() -> i64 {
     gtk_container_add(scrolled, text_view);
     let buffer = gtk_text_view_get_buffer(text_view);
     g_object_set_data(window, "text-buffer", buffer);
-    gtk_text_buffer_set_text(buffer, "Welcome to Lumora Text Editor!\n", -1 as i32);
+    gtk_text_buffer_set_text(buffer, @embed "welcome.txt", -1 as i32);
     gtk_widget_show_all(window);
     gtk_main();
     return 0;
