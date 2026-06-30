@@ -112,6 +112,7 @@ private:
     IRValue     emitAssignExpr(ast::AssignExpr& e);
     IRValue     emitFieldExpr(ast::FieldExpr& e);
     IRValue     emitIndexExpr(ast::IndexExpr& e);
+    IRValue     emitStructExpr(ast::StructExpr& e);
 
     IRValue     emitExtensionNode(ast::ExtensionNode& n);
 

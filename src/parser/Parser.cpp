@@ -129,7 +129,8 @@ NodePtr Parser::parseTopLevelItem() {
         case TokenKind::KwUse:    return parseUseDecl(isPub);
         case TokenKind::KwMod:    return parseModDecl(isPub);
         case TokenKind::KwExtern: return parseExternDecl();
-        case TokenKind::KwConst:  return parseLetStmt();
+        case TokenKind::KwLet:
+        case TokenKind::KwConst:  return parseLetStmt(isPub);
         default:
             error(std::format("unexpected token '{}' at top level", peek().raw), peek().loc);
             eat();
@@ -373,12 +374,13 @@ NodePtr Parser::parseStmt() {
     }
 }
 
-NodePtr Parser::parseLetStmt() {
+NodePtr Parser::parseLetStmt(bool isPub) {
     auto l   = std::make_unique<LetStmt>();
     l->loc   = peek().loc;
-    bool isConst = check(TokenKind::KwConst);
+    l->isPub = isPub;
+    l->isConst = check(TokenKind::KwConst);
     eat();
-    l->isMut = !isConst && match(TokenKind::KwMut);
+    l->isMut = !l->isConst && match(TokenKind::KwMut);
     l->name  = expect(TokenKind::Ident).raw;
     if (match(TokenKind::Colon)) l->ty = parseType();
     if (match(TokenKind::Eq))    l->init = parseExpr();
@@ -710,13 +712,10 @@ NodePtr Parser::parsePrimaryExpr() {
             while (match(TokenKind::DoubleColon)) {
                 path->segments.push_back(expect(TokenKind::Ident).raw);
             }
-            if (path->segments.size() == 1) {
-                auto id  = std::make_unique<IdentExpr>();
-                id->loc  = path->loc;
-                id->name = path->segments[0];
-                return id;
-            }
-            if (check(TokenKind::LBrace)) {
+            if (check(TokenKind::LBrace) &&
+                (path->segments.size() > 1 ||
+                 peek(1).kind == TokenKind::RBrace ||
+                 (peek(1).kind == TokenKind::Ident && peek(2).kind == TokenKind::Colon))) {
                 auto s = std::make_unique<StructExpr>();
                 s->loc  = path->loc;
                 s->path = std::move(path->segments);
@@ -732,6 +731,12 @@ NodePtr Parser::parsePrimaryExpr() {
                 }
                 expect(TokenKind::RBrace);
                 return s;
+            }
+            if (path->segments.size() == 1) {
+                auto id  = std::make_unique<IdentExpr>();
+                id->loc  = path->loc;
+                id->name = std::move(path->segments[0]);
+                return id;
             }
             return path;
         }

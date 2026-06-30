@@ -200,6 +200,9 @@ void IREmitter::emitTopLevel(Node &n) {
   case NodeKind::StructDecl:
     emitStructDecl(static_cast<StructDecl &>(n));
     break;
+  case NodeKind::LetStmt:
+    emitGlobalLet(static_cast<LetStmt &>(n));
+    break;
   case NodeKind::ExtensionNode: {
     auto &ext = static_cast<ExtensionNode &>(n);
     if (!ext.irFragment.empty()) {
@@ -311,6 +314,87 @@ void IREmitter::emitFnDecl(FnDecl &fn) {
   }
 
   flushFn(fn.name, retTy, paramStrs, isVararg);
+}
+
+void IREmitter::emitGlobalLet(LetStmt &l) {
+  TypeRef ty = SemaType::i64Ty();
+  std::string initVal = "0";
+  bool hasInit = false;
+
+  if (l.ty)
+    ty = m_sema.resolveType(*l.ty);
+
+  if (l.init) {
+    switch (l.init->kind) {
+    case NodeKind::IntLit: {
+      auto &v = static_cast<IntLit &>(*l.init);
+      initVal = std::to_string(v.value);
+      ty = SemaType::i64Ty();
+      hasInit = true;
+      break;
+    }
+    case NodeKind::FloatLit: {
+      auto &v = static_cast<FloatLit &>(*l.init);
+      auto s = std::format("{:.17g}", v.value);
+      if (s.find('.') == std::string::npos && s.find('e') == std::string::npos)
+        s += ".0";
+      initVal = std::move(s);
+      ty = SemaType::f64Ty();
+      hasInit = true;
+      break;
+    }
+    case NodeKind::BoolLit: {
+      auto &v = static_cast<BoolLit &>(*l.init);
+      initVal = v.value ? "1" : "0";
+      ty = SemaType::boolTy();
+      hasInit = true;
+      break;
+    }
+    case NodeKind::NullLit: {
+      initVal = "null";
+      ty = SemaType::ptrTy(SemaType::voidTy());
+      hasInit = true;
+      break;
+    }
+    case NodeKind::StringLit: {
+      auto &s = static_cast<StringLit &>(*l.init);
+      size_t idx = m_strCounter++;
+      size_t len = s.value.size() + 1;
+      std::string escaped;
+      for (char c : s.value) {
+        if (c == '\n')       escaped += "\\0A";
+        else if (c == '\t')  escaped += "\\09";
+        else if (c == '\033') escaped += "\\1B";
+        else if (c == '\\')  escaped += "\\5C";
+        else if (c == '"')   escaped += "\\22";
+        else                 escaped += c;
+      }
+      escaped += "\\00";
+      m_stringLits.push_back(
+        std::format("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\"",
+                     idx, len, escaped));
+      initVal = std::format("getelementptr ([{} x i8], [{} x i8]* @.str.{}, i64 0, i64 0)",
+                             len, len, idx);
+      ty = SemaType::ptrTy(SemaType::u8Ty());
+      hasInit = true;
+      break;
+    }
+    default:
+      initVal = "zeroinitializer";
+      hasInit = true;
+      break;
+    }
+  }
+
+  if (!hasInit)
+    initVal = "zeroinitializer";
+
+  std::string globalTy = llvmType(ty);
+  std::string linkage = l.isConst ? "constant" : "global";
+  m_out << std::format("@{} = {} {} {}", l.name, linkage, globalTy, initVal) << "\n\n";
+
+  auto ptrTy = SemaType::ptrTy(ty);
+  m_globals[l.name] = {std::string("@") + l.name, ptrTy, true};
 }
 
 void IREmitter::emitBlock(BlockStmt &b) {
@@ -532,6 +616,8 @@ IRValue IREmitter::emitExpr(Node &n) {
     return emitCastExpr(static_cast<CastExpr &>(n));
   case NodeKind::AssignExpr:
     return emitAssignExpr(static_cast<AssignExpr &>(n));
+  case NodeKind::StructExpr:
+    return emitStructExpr(static_cast<StructExpr &>(n));
   case NodeKind::FieldExpr:
     return emitFieldExpr(static_cast<FieldExpr &>(n));
   case NodeKind::IndexExpr:
@@ -825,11 +911,18 @@ IRValue IREmitter::emitAssignExpr(AssignExpr &e) {
   if (e.lhs->kind == NodeKind::IdentExpr) {
     auto &id = static_cast<IdentExpr &>(*e.lhs);
     auto it = m_locals.find(id.name);
+    auto git = m_globals.find(id.name);
+    IRValue *ptr = nullptr;
     if (it != m_locals.end()) {
+      ptr = &it->second;
+    } else if (git != m_globals.end()) {
+      ptr = &git->second;
+    }
+    if (ptr) {
       auto ty = rhs.type ? rhs.type : SemaType::i64Ty();
       auto tyStr = llvmType(ty);
       if (e.op != TokenKind::Eq) {
-        auto oldVal = load(it->second);
+        auto oldVal = load(*ptr);
         auto newReg_ = newReg();
         std::string op =
             intOp(e.op == TokenKind::PlusEq    ? TokenKind::Plus
@@ -844,11 +937,11 @@ IRValue IREmitter::emitAssignExpr(AssignExpr &e) {
         emitToCurrentBlock(std::format("{} = {} {} {}, {}", newReg_, op, tyStr,
                                        oldVal.reg, rhs.reg));
         emitToCurrentBlock(std::format("store {} {}, {}* {}", tyStr, newReg_,
-                                       tyStr, it->second.reg));
+                                       tyStr, ptr->reg));
         return {newReg_, ty, false};
       }
       emitToCurrentBlock(std::format("store {} {}, {}* {}", tyStr, rhs.reg,
-                                     tyStr, it->second.reg));
+                                     tyStr, ptr->reg));
       return rhs;
     }
   }
@@ -861,13 +954,52 @@ IRValue IREmitter::emitAssignExpr(AssignExpr &e) {
   return rhs;
 }
 
+IRValue IREmitter::emitStructExpr(StructExpr &e) {
+  TypeRef structTy = SemaType::voidTy();
+  if (!e.path.empty()) {
+    auto sym = m_sema.lookupSymbol(e.path.back());
+    if (sym && sym->type)
+      structTy = sym->type;
+  }
+  std::string tyStr = llvmType(structTy);
+  std::string cur = newReg();
+  if (e.fields.empty()) {
+    emitToCurrentBlock(std::format("{} = insertvalue {} zeroinitializer", cur, tyStr));
+    return {cur, structTy, false};
+  }
+  auto firstVal = emitExpr(*e.fields[0]->value);
+  emitToCurrentBlock(std::format("{} = insertvalue {} zeroinitializer, {} {}, 0",
+                                 cur, tyStr, llvmType(firstVal.type), firstVal.reg));
+  for (size_t i = 1; i < e.fields.size(); ++i) {
+    if (!e.fields[i] || !e.fields[i]->value)
+      continue;
+    auto val = emitExpr(*e.fields[i]->value);
+    auto nxt = newReg();
+    emitToCurrentBlock(std::format("{} = insertvalue {} {}, {} {}, {}", nxt, tyStr, cur,
+                                   llvmType(val.type), val.reg, i));
+    cur = nxt;
+  }
+  return {cur, structTy, false};
+}
+
 IRValue IREmitter::emitFieldExpr(FieldExpr &e) {
   auto obj = emitExpr(*e.obj);
+  size_t fieldIdx = 0;
+  TypeRef fieldTy = SemaType::i64Ty();
+  if (obj.type && obj.type->kind == TypeKind::Struct) {
+    for (size_t i = 0; i < obj.type->fieldNames.size(); ++i) {
+      if (obj.type->fieldNames[i] == e.field) {
+        fieldIdx = i;
+        if (i < obj.type->params.size())
+          fieldTy = obj.type->params[i];
+        break;
+      }
+    }
+  }
   auto reg = newReg();
-  emitToCurrentBlock(std::format("; field access .{} on {}", e.field, obj.reg));
-  emitToCurrentBlock(std::format("{} = extractvalue {} {}, 0", reg,
-                                 llvmType(obj.type), obj.reg));
-  return {reg, SemaType::i64Ty(), false};
+  emitToCurrentBlock(std::format("{} = extractvalue {} {}, {}", reg,
+                                 llvmType(obj.type), obj.reg, fieldIdx));
+  return {reg, fieldTy, false};
 }
 
 IRValue IREmitter::emitIndexExpr(IndexExpr &e) {

@@ -25,6 +25,7 @@ struct SemaType {
     std::string               name;
     TypeRef                   inner;
     std::vector<TypeRef>      params;
+    std::vector<std::string>  fieldNames;
     TypeRef                   ret;
     size_t                    arrayLen = 0;
     bool                      isMut    = false;

@@ -1,0 +1,22 @@
+extern "C" {
+    fn putchar(c: i32) -> i32;
+    fn printf(fmt: *u8, ...) -> i32;
+}
+
+const greeting: *u8 = "hello from global const";
+let mut counter: i64 = 0;
+struct Vec2 {
+    x: f64,
+    y: f64,
+}
+
+fn main() -> i64 {
+    printf(greeting);
+    printf("\n");
+    counter = counter + 1;
+    counter = counter + 1;
+    let v = Vec2 { x: 3.14, y: 2.71 };
+    printf("v.x = %f, v.y = %f\n", v.x, v.y);
+    printf("counter = %lld\n", counter);
+    0
+}

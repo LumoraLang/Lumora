@@ -165,6 +165,19 @@ void Sema::analyzeItem(Node &n) {
   case NodeKind::StructDecl:
     analyzeStruct(static_cast<StructDecl &>(n));
     break;
+  case NodeKind::LetStmt: {
+    auto &l = static_cast<LetStmt &>(n);
+    TypeRef ty = l.ty ? resolveTypeNode(*l.ty) : nullptr;
+    if (l.init) {
+      auto initTy = analyzeExpr(*l.init);
+      if (!ty)
+        ty = initTy;
+    }
+    if (!ty)
+      ty = SemaType::voidTy();
+    currentScope().define(Symbol{l.name, ty, l.isMut, false, &l});
+    break;
+  }
   case NodeKind::ExternDecl: {
     auto &ext = static_cast<ExternDecl &>(n);
     for (auto &item : ext.items) {
@@ -278,6 +291,10 @@ void Sema::analyzeStruct(StructDecl &s) {
   auto t = std::make_shared<SemaType>();
   t->kind = TypeKind::Struct;
   t->name = s.name;
+  for (auto &f : s.fields) {
+    t->fieldNames.push_back(f->name);
+    t->params.push_back(f->ty ? resolveTypeNode(*f->ty) : SemaType::voidTy());
+  }
   m_typeEnv[s.name] = t;
   currentScope().define(Symbol{s.name, t, false, false, &s});
 }
@@ -419,7 +436,28 @@ TypeRef Sema::analyzeExpr(Node &n) {
   }
   case NodeKind::FieldExpr: {
     auto &f = static_cast<FieldExpr &>(n);
-    analyzeExpr(*f.obj);
+    auto objTy = analyzeExpr(*f.obj);
+    if (objTy && objTy->kind == TypeKind::Struct) {
+      for (size_t i = 0; i < objTy->fieldNames.size(); ++i) {
+        if (objTy->fieldNames[i] == f.field) {
+          if (i < objTy->params.size())
+            return objTy->params[i];
+          break;
+        }
+      }
+    }
+    return SemaType::voidTy();
+  }
+  case NodeKind::StructExpr: {
+    auto &s = static_cast<StructExpr &>(n);
+    if (!s.path.empty()) {
+      auto sym = lookupSymbol(s.path.back());
+      if (sym && sym->type)
+        return sym->type;
+    }
+    for (auto &f : s.fields)
+      if (f)
+        analyzeExpr(*f->value);
     return SemaType::voidTy();
   }
   case NodeKind::IndexExpr: {

@@ -197,7 +197,9 @@ struct LetStmt : TypedNode<NodeKind::LetStmt> {
     std::string name;
     TypePtr     ty;
     NodePtr     init;
-    bool        isMut = false;
+    bool        isMut  = false;
+    bool        isPub  = false;
+    bool        isConst = false;
 };
 
 struct ReturnStmt : TypedNode<NodeKind::ReturnStmt> {

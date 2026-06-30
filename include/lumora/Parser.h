@@ -60,7 +60,7 @@ private:
     std::unique_ptr<ast::ExternDecl> parseExternDecl();
 
     std::unique_ptr<ast::BlockStmt>  parseBlock();
-    ast::NodePtr                     parseLetStmt();
+    ast::NodePtr                     parseLetStmt(bool isPub = false);
     ast::NodePtr                     parseReturnStmt();
     ast::NodePtr                     parseIfStmt();
     ast::NodePtr                     parseWhileStmt();
