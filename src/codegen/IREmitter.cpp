@@ -606,6 +606,10 @@ IRValue IREmitter::emitIdentExpr(IdentExpr &e) {
   if (git != m_globals.end()) {
     return load(git->second);
   }
+  auto sym = m_sema.lookupSymbol(e.name);
+  if (sym && sym->type && sym->type->kind == TypeKind::Fn) {
+    return {"@" + e.name, sym->type, false};
+  }
   return {"@" + e.name, SemaType::voidTy(), false};
 }
 
