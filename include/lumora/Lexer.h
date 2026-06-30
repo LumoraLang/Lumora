@@ -25,6 +25,7 @@ public:
     Token peek(size_t offset = 0);
     std::vector<Token> tokenizeAll();
 
+    [[nodiscard]] size_t position() const noexcept { return m_pos; }
     [[nodiscard]] SourceLoc currentLoc() const noexcept;
 
 private:

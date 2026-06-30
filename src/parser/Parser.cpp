@@ -316,6 +316,11 @@ std::unique_ptr<ExternDecl> Parser::parseExternDecl() {
     while (!check(TokenKind::RBrace) && !check(TokenKind::Eof)) {
         bool pub = match(TokenKind::KwPub);
         e->items.push_back(parseFnDecl(pub));
+        if (!check(TokenKind::RBrace) && !check(TokenKind::Eof) &&
+            !check(TokenKind::KwFn) && !check(TokenKind::KwPub)) {
+            error(std::format("unexpected token '{}' in extern block", peek().raw), peek().loc);
+            eat();
+        }
     }
     expect(TokenKind::RBrace);
     return e;
@@ -741,8 +746,9 @@ NodePtr Parser::parsePrimaryExpr() {
 
 TypePtr Parser::parseType() {
     switch (peek().kind) {
-        case TokenKind::Star:    return parsePtrOrRefType();
-        case TokenKind::Amp:     return parsePtrOrRefType();
+        case TokenKind::StarStar: return parsePtrOrRefType();
+        case TokenKind::Star:     return parsePtrOrRefType();
+        case TokenKind::Amp:      return parsePtrOrRefType();
         case TokenKind::LBracket: return parseArrayOrSliceType();
         case TokenKind::LParen:   return parseTupleType();
         case TokenKind::KwFn:     return parseFnType();
@@ -793,6 +799,7 @@ TypePtr Parser::parseType() {
 
 TypePtr Parser::parsePtrOrRefType() {
     auto isRef = check(TokenKind::Amp);
+    auto isDouble = check(TokenKind::StarStar);
     auto loc   = eat().loc;
     bool isMut = match(TokenKind::KwMut);
     auto inner = parseType();
@@ -807,6 +814,12 @@ TypePtr Parser::parsePtrOrRefType() {
     p->loc   = loc;
     p->isMut = isMut;
     p->inner = std::move(inner);
+    if (isDouble) {
+        auto outer   = std::make_unique<PtrTypeNode>();
+        outer->loc   = loc;
+        outer->inner = std::move(p);
+        return outer;
+    }
     return p;
 }
 
