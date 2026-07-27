@@ -1,0 +1,77 @@
+@include "../stdlib/io.lmi"
+@include "../stdlib/memory.lmi"
+
+extern "C" {
+    fn strlen(s: *u8) -> i64;
+}
+
+enum Color {
+    Red = 0,
+    Green = 1,
+    Blue = 2,
+}
+
+enum Shape {
+    Circle(f64),
+    Rect(f64, f64),
+}
+
+fn demo_enums() -> void {
+    printf("=== Enum demo ===\n");
+    let c = Green;
+    printf("Green = %lld (should be 1)\n", c);
+    printf("\n");
+}
+
+fn demo_defer() -> void {
+    printf("=== Defer demo ===\n");
+    let buf = malloc(64);
+    if buf == null {
+        printf("allocation failed\n");
+        return;
+    }
+    defer free(buf);
+    printf("allocated 64 bytes, will free on return\n");
+
+    let f = fopen("/dev/null", "r");
+    if f != null {
+        defer fclose(f);
+        printf("opened /dev/null, will close on return\n");
+    }
+    printf("\n");
+}
+
+fn use_deeply_nested() -> void {
+    printf("=== Nested defer demo ===\n");
+    let a = malloc(16);
+    if a == null { return; }
+    defer free(a);
+    printf("layer a allocated\n");
+
+    let b = malloc(32);
+    if b == null { return; }
+    defer free(b);
+    printf("layer b allocated\n");
+
+    let c = malloc(64);
+    if c == null { return; }
+    defer free(c);
+    printf("layer c allocated\n");
+    printf("  all three freed in reverse order on return\n");
+    printf("\n");
+}
+
+fn demo_slice_type() -> void {
+    printf("=== Slice type demo ===\n");
+    printf("[]i64 is a valid type (pointer + length pair)\n");
+    printf("\n");
+}
+
+pub fn main() -> i32 {
+    demo_enums();
+    demo_defer();
+    use_deeply_nested();
+    demo_slice_type();
+    printf("all features demonstrated successfully\n");
+    return 0;
+}

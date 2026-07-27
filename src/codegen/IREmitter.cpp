@@ -200,6 +200,9 @@ void IREmitter::emitTopLevel(Node &n) {
   case NodeKind::StructDecl:
     emitStructDecl(static_cast<StructDecl &>(n));
     break;
+  case NodeKind::EnumDecl:
+    emitEnumDecl(static_cast<EnumDecl &>(n));
+    break;
   case NodeKind::LetStmt:
     emitGlobalLet(static_cast<LetStmt &>(n));
     break;
@@ -229,6 +232,39 @@ void IREmitter::emitStructDecl(StructDecl &s) {
       m_out << "i32";
   }
   m_out << " }\n\n";
+}
+
+void IREmitter::emitEnumDecl(EnumDecl &e) {
+  bool hasPayload = false;
+  for (auto &v : e.variants) {
+    if (!v->fields.empty()) {
+      hasPayload = true;
+      break;
+    }
+  }
+  if (!hasPayload) {
+    int tag = 0;
+    for (auto &v : e.variants) {
+      auto name = e.name + "." + v->name;
+      m_out << "@" << name << " = constant i32 " << tag << "\n";
+      tag++;
+    }
+    m_out << "\n";
+    return;
+  }
+
+  auto enumTy = llvmType(*m_sema.lookupType(e.name));
+  m_out << "%" << e.name << " = type " << enumTy << "\n";
+  int tag = 0;
+  for (auto &v : e.variants) {
+    auto name = e.name + "." + v->name;
+    if (v->fields.empty()) {
+      m_out << "@" << name << " = constant %" << e.name
+            << " { i8 " << tag << ", [0 x i8] zeroinitializer }\n";
+    }
+    tag++;
+  }
+  m_out << "\n";
 }
 
 void IREmitter::emitExternDecl(ExternDecl &ext) {
@@ -270,6 +306,7 @@ void IREmitter::emitFnDecl(FnDecl &fn) {
   m_blocks.clear();
   m_regCounter = 0;
   m_locals.clear();
+  m_deferStack.clear();
   m_currentFn = fn.name;
 
   beginBlock("entry");
@@ -307,6 +344,8 @@ void IREmitter::emitFnDecl(FnDecl &fn) {
                        last.starts_with("unreachable");
   }
   if (!lastIsTerminator) {
+    if (!m_deferStack.empty())
+      emitDeferred();
     if (retTy == "void")
       emitToCurrentBlock("ret void");
     else
@@ -462,6 +501,7 @@ void IREmitter::emitLetStmt(LetStmt &l) {
 }
 
 void IREmitter::emitReturnStmt(ReturnStmt &r) {
+  emitDeferred();
   if (r.value) {
     auto val = emitExpr(*r.value);
     emitToCurrentBlock(std::format("ret {} {}", llvmType(val.type), val.reg));
@@ -590,7 +630,14 @@ void IREmitter::emitForStmt(ForStmt &s) {
   beginBlock(exitLabel);
 }
 
-void IREmitter::emitDeferStmt(DeferStmt &s) { (void)s; }
+void IREmitter::emitDeferStmt(DeferStmt &s) {
+  m_deferStack.push_back(s.expr.get());
+}
+
+void IREmitter::emitDeferred() {
+  for (auto it = m_deferStack.rbegin(); it != m_deferStack.rend(); ++it)
+    emitExpr(**it);
+}
 
 IRValue IREmitter::emitExpr(Node &n) {
   switch (n.kind) {
@@ -703,8 +750,13 @@ IRValue IREmitter::emitIdentExpr(IdentExpr &e) {
     return load(git->second);
   }
   auto sym = m_sema.lookupSymbol(e.name);
-  if (sym && sym->type && sym->type->kind == TypeKind::Fn) {
-    return {"@" + e.name, sym->type, false};
+  if (sym) {
+    if (sym->type && sym->type->kind == TypeKind::Fn) {
+      return {"@" + e.name, sym->type, false};
+    }
+    if (sym->type && sym->type->kind == TypeKind::Enum) {
+      return {"@" + sym->type->name + "." + e.name, sym->type, false};
+    }
   }
   return {"@" + e.name, SemaType::voidTy(), false};
 }
@@ -1008,6 +1060,18 @@ IRValue IREmitter::emitIndexExpr(IndexExpr &e) {
   auto reg = newReg();
   auto elemTy =
       obj.type && obj.type->inner ? obj.type->inner : SemaType::i64Ty();
+
+  if (obj.type && obj.type->kind == TypeKind::Slice) {
+    auto ptr = newReg();
+    emitToCurrentBlock(
+        std::format("{} = extractvalue {} {}, 0", ptr, llvmType(obj.type), obj.reg));
+    auto gep = newReg();
+    emitToCurrentBlock(std::format("{} = getelementptr {}, {}* {}, i64 {}", gep,
+                                   llvmType(elemTy), llvmType(elemTy), ptr,
+                                   idx.reg));
+    return load({gep, SemaType::ptrTy(elemTy), true});
+  }
+
   emitToCurrentBlock(std::format("{} = getelementptr {}, {}* {}, i64 {}", reg,
                                  llvmType(elemTy), llvmType(elemTy), obj.reg,
                                  idx.reg));

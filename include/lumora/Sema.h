@@ -40,6 +40,7 @@ struct SemaType {
     static TypeRef f64Ty();
     static TypeRef ptrTy(TypeRef inner, bool isMut = false);
     static TypeRef refTy(TypeRef inner, bool isMut = false);
+    static TypeRef sliceTy(TypeRef inner);
     [[nodiscard]] bool isInt()    const noexcept;
     [[nodiscard]] bool isFloat()  const noexcept;
     [[nodiscard]] bool isNumeric()const noexcept;
@@ -82,6 +83,7 @@ public:
     [[nodiscard]] const std::vector<SemaError>& errors() const noexcept;
     [[nodiscard]] bool hasErrors()                        const noexcept;
     TypeRef        resolveType(ast::Node& tyNode);
+    TypeRef        lookupType(const std::string& name);
     TypeRef        inferExpr(ast::Node& expr);
     void           pushScope();
     void           popScope();
@@ -97,6 +99,7 @@ private:
     void    analyzeItem(ast::Node& n);
     void    analyzeFn(ast::FnDecl& fn);
     void    analyzeStruct(ast::StructDecl& s);
+    void    analyzeEnum(ast::EnumDecl& e);
     void    analyzeBlock(ast::BlockStmt& b);
     void    analyzeStmt(ast::Node& n);
     TypeRef analyzeExpr(ast::Node& n);

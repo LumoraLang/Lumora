@@ -82,12 +82,14 @@ private:
     std::unordered_map<std::string, IRValue>  m_globals;
     std::vector<std::string>                  m_stringLits;
     std::unordered_set<std::string>           m_declaredFns;
+    std::vector<ast::Node*>                   m_deferStack;
 
     void        emitModule(ast::Module& mod);
     void        emitTopLevel(ast::Node& n);
     void        emitFnDecl(ast::FnDecl& fn);
     void        emitExternDecl(ast::ExternDecl& ext);
     void        emitStructDecl(ast::StructDecl& s);
+    void        emitEnumDecl(ast::EnumDecl& e);
     void        emitGlobalLet(ast::LetStmt& l);
 
     void        emitBlock(ast::BlockStmt& b);
@@ -130,6 +132,7 @@ private:
     void        flushFn(const std::string& name, const std::string& retTy,
                         const std::vector<std::string>& paramStrs, bool isVararg);
     void        ensureDeclared(const std::string& decl);
+    void        emitDeferred();
 };
 
 } 

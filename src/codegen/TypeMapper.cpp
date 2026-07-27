@@ -31,6 +31,10 @@ std::string IREmitter::llvmType(const SemaType& t) {
             }
             return "i8*";
         case TypeKind::Slice:
+            if (t.inner) {
+                auto elemTy = llvmType(*t.inner);
+                return "{ " + elemTy + "*, i64 }";
+            }
             return "{ i8*, i64 }";
         case TypeKind::Array:
             if (t.inner)
@@ -47,6 +51,18 @@ std::string IREmitter::llvmType(const SemaType& t) {
         case TypeKind::Struct:
         case TypeKind::Named:
             return "%struct." + t.name;
+        case TypeKind::Enum: {
+            bool hasPayload = false;
+            for (auto &v : t.params) {
+                if (!v->params.empty()) {
+                    hasPayload = true;
+                    break;
+                }
+            }
+            if (!hasPayload)
+                return "i32";
+            return "{ i8, [4 x i8] }";
+        }
         case TypeKind::Fn: {
             std::string ret = t.ret ? llvmType(*t.ret) : "void";
             std::string ps;

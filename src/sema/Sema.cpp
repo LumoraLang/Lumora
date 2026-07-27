@@ -68,6 +68,14 @@ TypeRef SemaType::refTy(TypeRef inner, bool isMut) {
   return t;
 }
 
+TypeRef SemaType::sliceTy(TypeRef inner) {
+  auto t = std::make_shared<SemaType>();
+  t->kind = TypeKind::Slice;
+  t->inner = std::move(inner);
+  t->name = "[]" + t->inner->name;
+  return t;
+}
+
 bool SemaType::isInt() const noexcept {
   return kind >= TypeKind::I8 && kind <= TypeKind::U128;
 }
@@ -165,6 +173,9 @@ void Sema::analyzeItem(Node &n) {
   case NodeKind::StructDecl:
     analyzeStruct(static_cast<StructDecl &>(n));
     break;
+  case NodeKind::EnumDecl:
+    analyzeEnum(static_cast<EnumDecl &>(n));
+    break;
   case NodeKind::LetStmt: {
     auto &l = static_cast<LetStmt &>(n);
     TypeRef ty = l.ty ? resolveTypeNode(*l.ty) : nullptr;
@@ -247,6 +258,11 @@ TypeRef Sema::resolveTypeNode(Node &n) {
     auto inner = r.inner ? resolveTypeNode(*r.inner) : SemaType::voidTy();
     return SemaType::refTy(inner, r.isMut);
   }
+  case NodeKind::SliceType: {
+    auto &s = static_cast<SliceTypeNode &>(n);
+    auto inner = s.inner ? resolveTypeNode(*s.inner) : SemaType::voidTy();
+    return SemaType::sliceTy(inner);
+  }
   case NodeKind::NamedType: {
     auto &named = static_cast<NamedTypeNode &>(n);
     if (!named.path.empty()) {
@@ -266,6 +282,13 @@ TypeRef Sema::resolveTypeNode(Node &n) {
 }
 
 TypeRef Sema::resolveType(Node &n) { return resolveTypeNode(n); }
+
+TypeRef Sema::lookupType(const std::string &name) {
+  auto it = m_typeEnv.find(name);
+  if (it != m_typeEnv.end())
+    return it->second;
+  return SemaType::voidTy();
+}
 void Sema::analyzeFn(FnDecl &fn) {
   auto retType = fn.retTy ? resolveTypeNode(*fn.retTy) : SemaType::voidTy();
   auto fnType = std::make_shared<SemaType>();
@@ -297,6 +320,25 @@ void Sema::analyzeStruct(StructDecl &s) {
   }
   m_typeEnv[s.name] = t;
   currentScope().define(Symbol{s.name, t, false, false, &s});
+}
+
+void Sema::analyzeEnum(EnumDecl &e) {
+  auto t = std::make_shared<SemaType>();
+  t->kind = TypeKind::Enum;
+  t->name = e.name;
+  for (auto &v : e.variants) {
+    t->fieldNames.push_back(v->name);
+    auto vt = std::make_shared<SemaType>();
+    vt->kind = TypeKind::Struct;
+    vt->name = e.name + "." + v->name;
+    for (auto &f : v->fields) {
+      vt->params.push_back(resolveTypeNode(*f));
+    }
+    t->params.push_back(vt);
+    currentScope().define(Symbol{v->name, t, false, false, &e});
+  }
+  m_typeEnv[e.name] = t;
+  currentScope().define(Symbol{e.name, t, false, false, &e});
 }
 
 void Sema::analyzeBlock(BlockStmt &b) {
