@@ -20,6 +20,17 @@
 
 Lumora is a modern, statically-typed programming language compiler built with C++ and LLVM. It features a powerful extension system allowing for custom syntax extensions and macros via dynamically loaded shared libraries.
 
+## Examples
+
+|               OpenGL Triangle                   |                     Raylib                         |
+| :-----------------------------------------------------------: | :--------------------------------------------------------------------------------------------: |
+| <img width="935" height="688" alt="image" src="https://github.com/user-attachments/assets/e0f55544-4b15-4df1-a9de-4808606be248" /> | <img width="832" height="656" alt="image" src="https://github.com/user-attachments/assets/c405ad30-90be-423a-b8a1-9f9851efb2bb" /> |
+
+|                  Kernel                     |                 GTK3                    |
+| :------------------------------------------------------------------------: | :------------------------------------------------------------------: |
+| <img width="752" height="483" alt="image" src="https://github.com/user-attachments/assets/683aa3d7-b51a-43d6-81c6-f05a3d8e37fe" /> | <img width="832" height="656" alt="image" src="https://github.com/user-attachments/assets/0b32988c-e44f-4970-8a6e-7427f9844ed9" /> |
+
+
 ## Features
 
 - **LLVM Backend:** Generates high-performance native code using LLVM IR.
