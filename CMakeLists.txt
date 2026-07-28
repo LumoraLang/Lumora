@@ -1,14 +1,11 @@
 cmake_minimum_required(VERSION 3.20)
-project(lumora VERSION 0.1.0 LANGUAGES CXX)
-
+project(lumora VERSION 0.1.0 LANGUAGES CXX) #neo: i got no versioning yet
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
 option(LUMORA_BUILD_EXTENSIONS "Build bundled extensions" ON)
 option(LUMORA_BUILD_TESTS "Build test suite" ON)
-
 add_library(lumora_core STATIC
     src/lexer/Lexer.cpp
     src/lexer/Token.cpp
@@ -34,11 +31,9 @@ target_compile_options(lumora_core PRIVATE
 add_executable(lumorac src/driver/main.cpp)
 set_target_properties(lumorac PROPERTIES ENABLE_EXPORTS ON)
 target_link_libraries(lumorac PRIVATE lumora_core dl)
-
 if(LUMORA_BUILD_EXTENSIONS)
     add_subdirectory(extensions/example)
 endif()
-
 if(LUMORA_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)

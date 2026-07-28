@@ -33,12 +33,10 @@ struct ConfigParser {
   }
 
   bool atEnd() const { return pos >= src.size(); }
-
   std::string readLine() {
     std::string out;
     while (pos < src.size() && src[pos] != '\n') {
-      if (src[pos] != '\r')
-        out += src[pos];
+      if (src[pos] != '\r') out += src[pos];
       pos++;
     }
     if (pos < src.size()) {
@@ -50,29 +48,25 @@ struct ConfigParser {
 
   std::string trim(std::string_view sv) {
     size_t s = sv.find_first_not_of(" \t");
-    if (s == std::string_view::npos)
-      return "";
+    if (s == std::string_view::npos) return "";
     size_t e = sv.find_last_not_of(" \t");
     return std::string(sv.substr(s, e - s + 1));
   }
 
   std::string stripQuotes(std::string_view sv) {
-    if (sv.size() >= 2 && sv.front() == '"' && sv.back() == '"')
-      return std::string(sv.substr(1, sv.size() - 2));
+    if (sv.size() >= 2 && sv.front() == '"' && sv.back() == '"') return std::string(sv.substr(1, sv.size() - 2));
     return std::string(sv);
   }
 
   std::vector<std::string> parseArray(std::string_view sv) {
     std::vector<std::string> result;
     sv = sv.substr(sv.find('[') + 1);
-    if (auto end = sv.rfind(']'); end != std::string_view::npos)
-      sv = sv.substr(0, end);
+    if (auto end = sv.rfind(']'); end != std::string_view::npos) sv = sv.substr(0, end);
     std::stringstream ss{std::string(sv)};
     std::string item;
     while (std::getline(ss, item, ',')) {
       auto t = trim(stripQuotes(trim(item)));
-      if (!t.empty())
-        result.push_back(t);
+      if (!t.empty()) result.push_back(t);
     }
     return result;
   }
@@ -89,8 +83,7 @@ struct ConfigParser {
     }
 
     if (currentSection == "source") {
-      cfg.groups.push_back(
-          {currentSubSection.empty() ? "default" : currentSubSection, {}, {}});
+      cfg.groups.push_back({currentSubSection.empty() ? "default" : currentSubSection, {}, {}});
     } else if (currentSection == "opt") {
       cfg.optSteps.push_back({});
     } else if (currentSection == "link") {
@@ -102,7 +95,6 @@ struct ConfigParser {
 
   void applyKeyVal(std::string_view key, std::string_view rawVal) {
     auto val = stripQuotes(trim(rawVal));
-
     if (currentSection.empty()) {
       if (key == "name")
         cfg.name = val;
@@ -120,8 +112,7 @@ struct ConfigParser {
     if (currentSection == "extensions") {
       if (rawVal.find('[') != std::string_view::npos) {
         auto dirs = parseArray(rawVal);
-        cfg.extensionDirs.insert(cfg.extensionDirs.end(), dirs.begin(),
-                                 dirs.end());
+        cfg.extensionDirs.insert(cfg.extensionDirs.end(), dirs.begin(), dirs.end());
       } else if (key == "dir") {
         cfg.extensionDirs.push_back(val);
       }
@@ -129,26 +120,22 @@ struct ConfigParser {
     }
 
     if (currentSection == "source") {
-      if (cfg.groups.empty())
-        return;
+      if (cfg.groups.empty()) return;
       auto &grp = cfg.groups.back();
       if (key == "files" && rawVal.find('[') != std::string_view::npos) {
         auto files = parseArray(rawVal);
         grp.files.insert(grp.files.end(), files.begin(), files.end());
       } else if (key == "file") {
         grp.files.push_back(val);
-      } else if (key == "extensions" &&
-                 rawVal.find('[') != std::string_view::npos) {
+      } else if (key == "extensions" && rawVal.find('[') != std::string_view::npos) {
         auto dirs = parseArray(rawVal);
-        grp.extensionDirs.insert(grp.extensionDirs.end(), dirs.begin(),
-                                 dirs.end());
+        grp.extensionDirs.insert(grp.extensionDirs.end(), dirs.begin(), dirs.end());
       }
       return;
     }
 
     if (currentSection == "opt") {
-      if (cfg.optSteps.empty())
-        return;
+      if (cfg.optSteps.empty()) return;
       auto &opt = cfg.optSteps.back();
       if (key == "input")
         opt.input = val;
@@ -197,8 +184,7 @@ struct ConfigParser {
   LumoraConfig parse() {
     while (!atEnd()) {
       skip();
-      if (atEnd())
-        break;
+      if (atEnd()) break;
       auto rawLine = readLine();
       auto line_ = trim(rawLine);
       if (line_.empty() || line_.front() == '#')
@@ -210,8 +196,7 @@ struct ConfigParser {
       }
 
       auto eq = line_.find('=');
-      if (eq == std::string::npos)
-        continue;
+      if (eq == std::string::npos) continue;
       auto key = trim(line_.substr(0, eq));
       auto val = trim(line_.substr(eq + 1));
       applyKeyVal(key, val);
@@ -219,14 +204,11 @@ struct ConfigParser {
     return cfg;
   }
 };
-
-} // namespace
+}
 
 LumoraConfig LumoraConfig::loadFromFile(const std::filesystem::path &path) {
   std::ifstream f(path);
-  if (!f)
-    throw std::runtime_error(
-        std::format("cannot open config: {}", path.string()));
+  if (!f) throw std::runtime_error(std::format("cannot open config: {}", path.string()));
   std::ostringstream ss;
   ss << f.rdbuf();
   return loadFromString(ss.str());
@@ -250,5 +232,4 @@ std::string LumoraConfig::resolve(std::string_view val) const {
   }
   return result;
 }
-
-} // namespace lumora
+}

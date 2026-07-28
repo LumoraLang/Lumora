@@ -1,9 +1,7 @@
 #include "lumora/IREmitter.h"
 #include <format>
 #include <stdexcept>
-
 namespace lumora {
-
 std::string IREmitter::llvmType(const SemaType& t) {
     switch (t.kind) {
         case TypeKind::Void:    return "void";
@@ -59,8 +57,7 @@ std::string IREmitter::llvmType(const SemaType& t) {
                     break;
                 }
             }
-            if (!hasPayload)
-                return "i32";
+            if (!hasPayload) return "i32";
             return "{ i8, [4 x i8] }";
         }
         case TypeKind::Fn: {
@@ -88,5 +85,4 @@ std::string IREmitter::llvmTypeAST(ast::Node* tyNode) {
     auto resolved = m_sema.resolveType(*tyNode);
     return llvmType(resolved);
 }
-
-} 
+}

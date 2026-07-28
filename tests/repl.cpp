@@ -23,7 +23,7 @@ static std::string compileToIR(const std::string& src) {
 }
 
 int main() {
-    std::cout << "=== Lumora REPL ===\n";
+    std::cout << "[REPL] Welcome to the Lumora REPL\n";
     std::cout << "Type 'exit' to quit.\n";
     std::string line;
     std::stringstream sourceBuffer;
@@ -34,7 +34,7 @@ int main() {
         sourceBuffer << line << "\n";
         std::string ir = compileToIR(sourceBuffer.str());
         if (!ir.empty()) {
-            std::cout << "--- LLVM IR ---\n";
+            std::cout << "--- LLVM IR:\n";
             std::cout << ir << "\n";
         } else {
             std::cout << "(Waiting for more input...)\n";

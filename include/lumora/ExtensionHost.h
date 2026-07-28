@@ -8,9 +8,7 @@
 #include <memory>
 #include <functional>
 #include <filesystem>
-
 namespace lumora {
-
 struct ExtensionManifest {
     std::string id;
     std::string version;
@@ -27,7 +25,6 @@ struct ExtensionAPI {
 
 using ExtensionInitFn    = ExtensionManifest(*)(ExtensionAPI&);
 using ExtensionDestroyFn = void(*)();
-
 struct LoadedExtension {
     ExtensionManifest manifest;
     void*             handle = nullptr;
@@ -39,20 +36,15 @@ class ExtensionHost {
 public:
     ExtensionHost();
     ~ExtensionHost();
-
     void setAPI(ExtensionAPI api);
-
     bool load(const std::filesystem::path& soPath);
     void unloadAll();
-
     [[nodiscard]] const std::vector<LoadedExtension>& loaded() const noexcept;
     [[nodiscard]] size_t count() const noexcept;
-
     void loadDirectory(const std::filesystem::path& dir);
 
 private:
     ExtensionAPI                 m_api;
     std::vector<LoadedExtension> m_extensions;
 };
-
-} 
+}

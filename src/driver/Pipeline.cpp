@@ -5,16 +5,11 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
-
 namespace lumora {
-
-Pipeline::Pipeline(LumoraConfig cfg, PipelineOptions opts)
-    : m_cfg(std::move(cfg)), m_opts(std::move(opts)) {}
-
+Pipeline::Pipeline(LumoraConfig cfg, PipelineOptions opts) : m_cfg(std::move(cfg)), m_opts(std::move(opts)) {}
 const LumoraConfig &Pipeline::config() const noexcept { return m_cfg; }
 const PipelineOptions &Pipeline::options() const noexcept { return m_opts; }
 ExtensionHost &Pipeline::extHost() noexcept { return m_extHost; }
-
 void Pipeline::log(std::string_view msg) const {
   if (m_opts.verbose)
     std::cerr << "[lumora] " << msg << "\n";
@@ -52,16 +47,13 @@ void Pipeline::loadExtensions() {
 bool Pipeline::run() {
   ensureOutputDir();
   loadExtensions();
-
   std::vector<std::string> llFiles;
   bool allOk = true;
-
   for (auto &grp : m_cfg.groups) {
     for (auto &file : grp.files) {
       auto res = compileFile(file);
       if (!res.success) {
-        std::cerr << "\x1b[31merror\x1b[0m: compilation failed for " << file
-                  << "\n";
+        std::cerr << "\x1b[31merror\x1b[0m: compilation failed for " << file << "\n";
         allOk = false;
       } else {
         llFiles.push_back(res.irPath);
@@ -69,9 +61,7 @@ bool Pipeline::run() {
     }
   }
 
-  if (!allOk)
-    return false;
-
+  if (!allOk) return false;
   if (m_opts.multiboot) {
     auto bootPath = std::filesystem::path(m_cfg.outputDir) / "boot.S";
     std::ofstream boot(bootPath);
@@ -223,13 +213,10 @@ memcpy:
     log(std::format("wrote: {}", bootPath.string()));
   }
 
-  if (m_opts.stopAfterIR)
-    return true;
-
+  if (m_opts.stopAfterIR)return true;
   for (auto &optStep : m_cfg.optSteps) {
     if (!runOpt(optStep)) {
-      std::cerr << "\x1b[31merror\x1b[0m: opt step failed for " << optStep.input
-                << "\n";
+      std::cerr << "\x1b[31merror\x1b[0m: opt step failed for " << optStep.input << "\n";
       return false;
     }
   }
@@ -254,7 +241,6 @@ memcpy:
 CompileResult Pipeline::compileFile(const std::filesystem::path &srcPath) {
   CompileResult result;
   result.sourceFile = srcPath.string();
-
   std::ifstream f(srcPath);
   if (!f) {
     std::cerr << "\x1b[31merror\x1b[0m: cannot open " << srcPath << "\n";
@@ -263,16 +249,11 @@ CompileResult Pipeline::compileFile(const std::filesystem::path &srcPath) {
   std::ostringstream ss;
   ss << f.rdbuf();
   std::string src = ss.str();
-
   log(std::format("compiling: {}", srcPath.string()));
-
   Lexer lex(src, result.sourceFile);
-
   if (m_opts.dumpTokens) {
     auto tokens = lex.tokenizeAll();
-    for (auto &t : tokens)
-      std::cout << t.loc.line << ":" << t.loc.col << " " << t.kindName() << " '"
-                << t.raw << "'\n";
+    for (auto &t : tokens) std::cout << t.loc.line << ":" << t.loc.col << " " << t.kindName() << " '" << t.raw << "'\n";
     result.success = true;
     return result;
   }
@@ -280,16 +261,12 @@ CompileResult Pipeline::compileFile(const std::filesystem::path &srcPath) {
   Sema sema;
   IREmitter emitter(sema);
   Parser parser(lex);
-
   ExtensionAPI api{&lex, &parser, &sema, &emitter};
   m_extHost.setAPI(api);
-
   auto mod = parser.parseModule(srcPath.string());
-
   if (parser.hasErrors()) {
     for (auto &e : parser.errors())
-      std::cerr << e.loc.file << ":" << e.loc.line << ":" << e.loc.col << ": "
-                << e.message << "\n";
+      std::cerr << e.loc.file << ":" << e.loc.line << ":" << e.loc.col << ": " << e.message << "\n";
     return result;
   }
 
@@ -298,27 +275,20 @@ CompileResult Pipeline::compileFile(const std::filesystem::path &srcPath) {
   }
 
   sema.analyze(*mod);
-
   if (sema.hasErrors()) {
-    for (auto &e : sema.errors())
-      std::cerr << e.loc.file << ":" << e.loc.line << ":" << e.loc.col << ": "
-                << e.message << "\n";
+    for (auto &e : sema.errors()) std::cerr << e.loc.file << ":" << e.loc.line << ":" << e.loc.col << ": " << e.message << "\n";
     return result;
   }
 
   result.irOutput = emitter.emit(*mod);
   result.irPath = outputPath(srcPath).string();
-
-  if (m_opts.dumpIR)
-    std::cout << result.irOutput;
-
+  if (m_opts.dumpIR) std::cout << result.irOutput;
   std::ofstream out(result.irPath);
   if (!out) {
     std::cerr << "\x1b[31merror\x1b[0m: cannot write " << result.irPath << "\n";
     return result;
   }
   out << result.irOutput;
-
   result.success = true;
   log(std::format("emitted: {}", result.irPath));
   return result;
@@ -326,7 +296,6 @@ CompileResult Pipeline::compileFile(const std::filesystem::path &srcPath) {
 
 bool Pipeline::runOpt(const OptStep &step) {
   std::string cmd = step.program;
-
   if (!step.passes.empty()) {
     std::string passes;
     if (!step.level.empty()) {
@@ -342,8 +311,7 @@ bool Pipeline::runOpt(const OptStep &step) {
     cmd += " -" + step.level;
   }
 
-  for (auto &f : step.extraFlags)
-    cmd += " " + f;
+  for (auto &f : step.extraFlags) cmd += " " + f;
   cmd += " " + step.input + " -o " + step.output;
   log(cmd);
   return execCmd(cmd);
@@ -369,5 +337,4 @@ bool Pipeline::runCommand(const CommandStep &step) {
   log(step.cmd);
   return execCmd(step.cmd);
 }
-
-} // namespace lumora
+}

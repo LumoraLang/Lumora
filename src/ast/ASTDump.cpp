@@ -2,13 +2,9 @@
 #include "lumora/AST.h"
 #include <iostream>
 #include <string>
-
 namespace lumora::ast {
-
 static void dumpNode(const Node& n, int depth, std::ostream& out);
-
 static std::string indent(int d) { return std::string(d * 2, ' '); }
-
 static void dumpChildren(const Node& n, int depth, std::ostream& out) {
     switch (n.kind) {
         case NodeKind::Module:
@@ -84,5 +80,4 @@ static void dumpNode(const Node& n, int depth, std::ostream& out) {
 void dumpAST(const Node& root, std::ostream& out) {
     dumpNode(root, 0, out);
 }
-
-} 
+}

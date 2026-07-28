@@ -5,14 +5,11 @@
 #include <cassert>
 #include <iostream>
 #include <string>
-
 using namespace lumora;
-
 static std::string compile(std::string_view src) {
   Lexer lex(src, "<test>");
   Parser parser(lex);
   auto mod = parser.parseModule("<test>");
-
   if (parser.hasErrors()) {
     for (auto &e : parser.errors())
       std::cerr << "parse error: " << e.message << "\n";
@@ -21,7 +18,6 @@ static std::string compile(std::string_view src) {
 
   Sema sema;
   sema.analyze(*mod);
-
   IREmitter emitter(sema);
   return emitter.emit(*mod);
 }
@@ -102,8 +98,7 @@ static void testStructDecl() {
         }
     )");
   assert(!ir.empty());
-  assert(ir.find("%struct.Point = type { double, double }") !=
-         std::string::npos);
+  assert(ir.find("%struct.Point = type { double, double }") != std::string::npos);
   std::cout << "testStructDecl: PASS\n";
 }
 

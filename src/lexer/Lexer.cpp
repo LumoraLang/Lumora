@@ -7,9 +7,7 @@
 #include <regex>
 #include <sstream>
 #include <stdexcept>
-
 namespace lumora {
-
 namespace {
 static const std::unordered_map<std::string_view, TokenKind> kKeywords = {
     {"fn", TokenKind::KwFn},
@@ -56,9 +54,7 @@ static const std::unordered_map<std::string_view, TokenKind> kKeywords = {
 };
 }
 
-Lexer::Lexer(std::string_view source, std::string_view filename)
-    : m_src(source), m_file(filename) {}
-
+Lexer::Lexer(std::string_view source, std::string_view filename) : m_src(source), m_file(filename) {}
 void Lexer::registerExtension(LexerExtensionPoint ext) {
   m_extensions.push_back(std::move(ext));
 }
@@ -140,8 +136,7 @@ std::vector<Token> Lexer::tryExtensions(size_t startPos) {
   for (auto &ext : m_extensions) {
     std::regex re("^(?:" + ext.pattern + ")");
     std::cmatch m;
-    if (std::regex_search(remaining.data(), remaining.data() + remaining.size(),
-                          m, re)) {
+    if (std::regex_search(remaining.data(), remaining.data() + remaining.size(), m, re)) {
       std::string_view matched(remaining.data(), m[0].length());
       auto loc = makeLoc();
       for (size_t i = 0; i < matched.size(); ++i)
@@ -159,8 +154,7 @@ Token Lexer::lexIdOrKeyword() {
     buf += eat();
   }
   auto it = kKeywords.find(buf);
-  if (it != kKeywords.end())
-    return makeToken(it->second, buf, loc);
+  if (it != kKeywords.end()) return makeToken(it->second, buf, loc);
   return makeToken(TokenKind::Ident, buf, loc);
 }
 
@@ -168,13 +162,11 @@ Token Lexer::lexNumber() {
   auto loc = makeLoc();
   std::string buf;
   bool isFloat = false;
-
   if (cur() == '0' && (lookahead() == 'x' || lookahead() == 'X')) {
     buf += eat();
     buf += eat();
     while (std::isxdigit(static_cast<unsigned char>(cur())) || cur() == '_') {
-      if (cur() != '_')
-        buf += cur();
+      if (cur() != '_') buf += cur();
       eat();
     }
     Token t = makeToken(TokenKind::LitInt, buf, loc);
@@ -186,8 +178,7 @@ Token Lexer::lexNumber() {
     buf += eat();
     buf += eat();
     while (cur() == '0' || cur() == '1' || cur() == '_') {
-      if (cur() != '_')
-        buf += cur();
+      if (cur() != '_') buf += cur();
       eat();
     }
     Token t = makeToken(TokenKind::LitInt, buf, loc);
@@ -205,8 +196,7 @@ Token Lexer::lexNumber() {
     isFloat = true;
     buf += eat();
     while (std::isdigit(static_cast<unsigned char>(cur())) || cur() == '_') {
-      if (cur() != '_')
-        buf += cur();
+      if (cur() != '_') buf += cur();
       eat();
     }
   }
@@ -214,10 +204,8 @@ Token Lexer::lexNumber() {
   if (cur() == 'e' || cur() == 'E') {
     isFloat = true;
     buf += eat();
-    if (cur() == '+' || cur() == '-')
-      buf += eat();
-    while (std::isdigit(static_cast<unsigned char>(cur())))
-      buf += eat();
+    if (cur() == '+' || cur() == '-') buf += eat();
+    while (std::isdigit(static_cast<unsigned char>(cur()))) buf += eat();
   }
 
   if (isFloat) {
@@ -312,7 +300,6 @@ Token Lexer::lexChar() {
 
 Token Lexer::lexSymbol() {
   auto loc = makeLoc();
-
   auto eat2 = [&](TokenKind k, const char *raw) -> Token {
     eat();
     eat();
@@ -456,8 +443,7 @@ Token Lexer::lexSymbol() {
   }
 
   auto raw = std::string(1, eat());
-  throw std::runtime_error(std::format("{}:{}:{}: unexpected character '{}'",
-                                       m_file, loc.line, loc.col, raw));
+  throw std::runtime_error(std::format("{}:{}:{}: unexpected character '{}'", m_file, loc.line, loc.col, raw));
 }
 
 Token Lexer::advance() {
@@ -473,15 +459,13 @@ Token Lexer::advance() {
       return makeToken(TokenKind::Eof, "", makeLoc());
     if (m_pos + 6 <= m_src.size() && m_src.substr(m_pos, 6) == "@embed") {
       auto loc = makeLoc();
-      for (int i = 0; i < 6; ++i)
-        eat();
+      for (int i = 0; i < 6; ++i) eat();
       skipWhitespaceAndComments();
       if (cur() == '"') {
         auto pathTok = lexString();
         std::string embedPath = std::get<std::string>(pathTok.extra);
         std::filesystem::path currentPath(m_file);
-        auto fullPath =
-            (currentPath.parent_path() / embedPath).lexically_normal();
+        auto fullPath = (currentPath.parent_path() / embedPath).lexically_normal();
         std::string canonical = fullPath.string();
         std::ifstream f(fullPath);
         if (f) {
@@ -493,33 +477,25 @@ Token Lexer::advance() {
           m_injected.push_back(tok);
           continue;
         } else {
-          throw std::runtime_error(
-              std::format("{}:{}:{}: cannot open embedded file '{}'", m_file,
-                          loc.line, loc.col, fullPath.string()));
+          throw std::runtime_error(std::format("{}:{}:{}: cannot open embedded file '{}'", m_file, loc.line, loc.col, fullPath.string()));
         }
       } else {
-        throw std::runtime_error(
-            std::format("{}:{}:{}: expected string literal after @embed",
-                        m_file, loc.line, loc.col));
+        throw std::runtime_error(std::format("{}:{}:{}: expected string literal after @embed", m_file, loc.line, loc.col));
       }
     }
 
     if (m_pos + 8 <= m_src.size() && m_src.substr(m_pos, 8) == "@include") {
       auto loc = makeLoc();
-      for (int i = 0; i < 8; ++i)
-        eat();
+      for (int i = 0; i < 8; ++i) eat();
       skipWhitespaceAndComments();
       if (cur() == '"') {
         auto pathTok = lexString();
         std::string incPath = std::get<std::string>(pathTok.extra);
         std::filesystem::path currentPath(m_file);
-        auto fullPath =
-            (currentPath.parent_path() / incPath).lexically_normal();
+        auto fullPath = (currentPath.parent_path() / incPath).lexically_normal();
         std::string canonical = fullPath.string();
         if (m_includedSet.count(canonical)) {
-          throw std::runtime_error(
-              std::format("{}:{}:{}: circular include detected for '{}'",
-                          m_file, loc.line, loc.col, canonical));
+          throw std::runtime_error(std::format("{}:{}:{}: circular include detected for '{}'", m_file, loc.line, loc.col, canonical));
         }
 
         std::ifstream f(fullPath);
@@ -543,21 +519,16 @@ Token Lexer::advance() {
           }
           continue;
         } else {
-          throw std::runtime_error(
-              std::format("{}:{}:{}: cannot open included file '{}'", m_file,
-                          loc.line, loc.col, fullPath.string()));
+          throw std::runtime_error(std::format("{}:{}:{}: cannot open included file '{}'", m_file, loc.line, loc.col, fullPath.string()));
         }
       } else {
-        throw std::runtime_error(
-            std::format("{}:{}:{}: expected string literal after @include",
-                        m_file, loc.line, loc.col));
+        throw std::runtime_error(std::format("{}:{}:{}: expected string literal after @include", m_file, loc.line, loc.col));
       }
     }
 
     auto extToks = tryExtensions(m_pos);
     if (!extToks.empty()) {
-      for (auto &t : extToks)
-        m_injected.push_back(t);
+      for (auto &t : extToks) m_injected.push_back(t);
       continue;
     }
 
@@ -569,7 +540,6 @@ Token Lexer::advance() {
       return lexString();
     if (cur() == '\'')
       return lexChar();
-
     return lexSymbol();
   }
 }
@@ -584,8 +554,7 @@ Token Lexer::next() {
 }
 
 Token Lexer::peek(size_t offset) {
-  while (m_peekBuf.size() <= offset)
-    m_peekBuf.push_back(advance());
+  while (m_peekBuf.size() <= offset) m_peekBuf.push_back(advance());
   return m_peekBuf[offset];
 }
 
@@ -601,5 +570,4 @@ std::vector<Token> Lexer::tokenizeAll() {
 }
 
 SourceLoc Lexer::currentLoc() const noexcept { return makeLoc(); }
-
-} // namespace lumora
+}

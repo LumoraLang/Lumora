@@ -1,12 +1,8 @@
 #include "lumora/IREmitter.h"
 #include <format>
-
 namespace lumora {
-
 using namespace ast;
-
 IREmitter::IREmitter(Sema &sema) : m_sema(sema) {}
-
 void IREmitter::registerExtension(CodegenExtensionPoint ext) {
   m_extensions.push_back(std::move(ext));
 }
@@ -20,15 +16,13 @@ void IREmitter::emitInstr(std::string instr) {
   emitToCurrentBlock(std::move(instr));
 }
 void IREmitter::emitRaw(std::string raw) { m_out << raw; }
-
 void IREmitter::beginBlock(std::string label) {
   m_blocks.push_back({label, {}});
   m_currentBlock = m_blocks.size() - 1;
 }
 
 void IREmitter::emitToCurrentBlock(std::string instr) {
-  if (m_blocks.empty())
-    beginBlock("entry");
+  if (m_blocks.empty()) beginBlock("entry");
   if (instr.find("alloca") != std::string::npos && m_currentBlock != 0) {
     auto &entry = m_blocks[0];
     auto it = entry.instrs.end();
@@ -45,30 +39,24 @@ void IREmitter::emitToCurrentBlock(std::string instr) {
 }
 
 std::string IREmitter::currentLabel() const {
-  if (m_blocks.empty())
-    return "entry";
+  if (m_blocks.empty()) return "entry";
   return m_blocks[m_currentBlock].label;
 }
 
-void IREmitter::flushFn(const std::string &name, const std::string &retTy,
-                        const std::vector<std::string> &paramStrs,
-                        bool isVararg) {
+void IREmitter::flushFn(const std::string &name, const std::string &retTy, const std::vector<std::string> &paramStrs, bool isVararg) {
   m_out << "define " << retTy << " @" << name << "(";
   for (size_t i = 0; i < paramStrs.size(); ++i) {
-    if (i)
-      m_out << ", ";
+    if (i) m_out << ", ";
     m_out << paramStrs[i];
   }
   if (isVararg) {
-    if (!paramStrs.empty())
-      m_out << ", ";
+    if (!paramStrs.empty()) m_out << ", ";
     m_out << "...";
   }
   m_out << ") {\n";
   for (auto &b : m_blocks) {
     m_out << b.label << ":\n";
-    for (auto &instr : b.instrs)
-      m_out << "  " << instr << "\n";
+    for (auto &instr : b.instrs) m_out << "  " << instr << "\n";
   }
   m_out << "}\n\n";
 }
@@ -85,17 +73,14 @@ IRValue IREmitter::load(const IRValue &ptr) {
   auto ty = ptr.type && ptr.type->inner ? ptr.type->inner : SemaType::i32Ty();
   auto tyStr = llvmType(ty);
   auto reg = newReg();
-  emitToCurrentBlock(
-      std::format("{} = load {}, {}* {}", reg, tyStr, tyStr, ptr.reg));
+  emitToCurrentBlock(std::format("{} = load {}, {}* {}", reg, tyStr, tyStr, ptr.reg));
   return {reg, ty, false};
 }
 
 void IREmitter::store(const IRValue &val, const IRValue &ptr) {
   auto valTy = llvmType(val.type);
-  auto ptrTy =
-      llvmType(ptr.type && ptr.type->inner ? ptr.type->inner : val.type);
-  emitToCurrentBlock(
-      std::format("store {} {}, {}* {}", valTy, val.reg, ptrTy, ptr.reg));
+  auto ptrTy = llvmType(ptr.type && ptr.type->inner ? ptr.type->inner : val.type);
+  emitToCurrentBlock(std::format("store {} {}, {}* {}", valTy, val.reg, ptrTy, ptr.reg));
 }
 
 std::string IREmitter::intOp(TokenKind op, bool isSigned) const noexcept {
@@ -193,9 +178,7 @@ void IREmitter::emitModule(Module &mod) {
       emitTopLevel(*item);
   }
 
-  for (auto &d : m_declaredFns)
-    m_out << d << "\n";
-
+  for (auto &d : m_declaredFns)m_out << d << "\n";
   for (size_t i = 0; i < m_stringLits.size(); ++i) {
     m_out << m_stringLits[i] << "\n";
   }
@@ -321,13 +304,10 @@ void IREmitter::emitFnDecl(FnDecl &fn) {
   m_deferStack.clear();
   m_currentFn = fn.name;
   m_currentRetTy = fn.retTy ? llvmTypeAST(fn.retTy.get()) : "void";
-
   beginBlock("entry");
-
   std::string retTy = fn.retTy ? llvmTypeAST(fn.retTy.get()) : "void";
   std::vector<std::string> paramStrs;
   bool isVararg = false;
-
   for (auto &p : fn.params) {
     if (p->isVararg) {
       isVararg = true;
@@ -336,25 +316,19 @@ void IREmitter::emitFnDecl(FnDecl &fn) {
     std::string pTy = p->ty ? llvmTypeAST(p->ty.get()) : "i8*";
     std::string pReg = "%" + p->name + ".arg";
     paramStrs.push_back(pTy + " " + pReg);
-
     auto allocReg = "%" + p->name;
     emitToCurrentBlock(std::format("{} = alloca {}", allocReg, pTy));
-    emitToCurrentBlock(
-        std::format("store {} {}, {}* {}", pTy, pReg, pTy, allocReg));
-
+    emitToCurrentBlock(std::format("store {} {}, {}* {}", pTy, pReg, pTy, allocReg));
     auto ty = p->ty ? m_sema.resolveType(*p->ty) : SemaType::i64Ty();
     auto ptrTy = SemaType::ptrTy(ty);
     m_locals[p->name] = {allocReg, ptrTy, true};
   }
 
-  if (fn.body)
-    emitBlock(static_cast<BlockStmt &>(*fn.body));
-
+  if (fn.body) emitBlock(static_cast<BlockStmt &>(*fn.body));
   bool lastIsTerminator = false;
   if (!m_blocks.empty() && !m_blocks.back().instrs.empty()) {
     auto &last = m_blocks.back().instrs.back();
-    lastIsTerminator = last.starts_with("ret") || last.starts_with("br ") ||
-                       last.starts_with("unreachable");
+    lastIsTerminator = last.starts_with("ret") || last.starts_with("br ") || last.starts_with("unreachable");
   }
   if (!lastIsTerminator) {
     if (!m_deferStack.empty())
@@ -372,10 +346,7 @@ void IREmitter::emitGlobalLet(LetStmt &l) {
   TypeRef ty = SemaType::i64Ty();
   std::string initVal = "0";
   bool hasInit = false;
-
-  if (l.ty)
-    ty = m_sema.resolveType(*l.ty);
-
+  if (l.ty) ty = m_sema.resolveType(*l.ty);
   if (l.init) {
     switch (l.init->kind) {
     case NodeKind::IntLit: {
@@ -422,10 +393,8 @@ void IREmitter::emitGlobalLet(LetStmt &l) {
       }
       escaped += "\\00";
       m_stringLits.push_back(
-        std::format("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\"",
-                     idx, len, escaped));
-      initVal = std::format("getelementptr ([{} x i8], [{} x i8]* @.str.{}, i64 0, i64 0)",
-                             len, len, idx);
+        std::format("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\"", idx, len, escaped));
+      initVal = std::format("getelementptr ([{} x i8], [{} x i8]* @.str.{}, i64 0, i64 0)", len, len, idx);
       ty = SemaType::ptrTy(SemaType::u8Ty());
       hasInit = true;
       break;
@@ -437,22 +406,16 @@ void IREmitter::emitGlobalLet(LetStmt &l) {
     }
   }
 
-  if (!hasInit)
-    initVal = "zeroinitializer";
-
+  if (!hasInit) initVal = "zeroinitializer";
   std::string globalTy = llvmType(ty);
   std::string linkage = l.isConst ? "constant" : "global";
   m_out << std::format("@{} = {} {} {}", l.name, linkage, globalTy, initVal) << "\n\n";
-
   auto ptrTy = SemaType::ptrTy(ty);
   m_globals[l.name] = {std::string("@") + l.name, ptrTy, true};
 }
 
 void IREmitter::emitBlock(BlockStmt &b) {
-  for (auto &stmt : b.stmts) {
-    if (stmt)
-      emitStmt(*stmt);
-  }
+  for (auto &stmt : b.stmts) if (stmt) emitStmt(*stmt);
 }
 
 void IREmitter::emitStmt(Node &n) {
@@ -538,11 +501,9 @@ void IREmitter::emitLetStmt(LetStmt &l) {
       } else {
         emitToCurrentBlock(std::format("{} = bitcast {} {} to {}", tmpReg, srcS, val.reg, llvmTy));
       }
-      emitToCurrentBlock(
-          std::format("store {} {}, {}* {}", llvmTy, tmpReg, llvmTy, allocReg));
+      emitToCurrentBlock(std::format("store {} {}, {}* {}", llvmTy, tmpReg, llvmTy, allocReg));
     } else {
-      emitToCurrentBlock(
-          std::format("store {} {}, {}* {}", llvmTy, val.reg, llvmTy, allocReg));
+      emitToCurrentBlock(std::format("store {} {}, {}* {}", llvmTy, val.reg, llvmTy, allocReg));
     }
     m_locals[l.name] = {allocReg, ptrTy, true};
   } else {
@@ -560,9 +521,7 @@ void IREmitter::emitReturnStmt(ReturnStmt &r) {
     auto retTy = m_currentRetTy.empty() ? llvmType(val.type) : m_currentRetTy;
     if (retTy != llvmType(val.type)) {
       auto truncReg = newReg();
-      emitToCurrentBlock(
-          std::format("{} = trunc {} {} to {}", truncReg, llvmType(val.type),
-                      val.reg, retTy));
+      emitToCurrentBlock(std::format("{} = trunc {} {} to {}", truncReg, llvmType(val.type), val.reg, retTy));
       val = {truncReg, val.type, false};
     }
     emitToCurrentBlock(std::format("ret {} {}", retTy, val.reg));
@@ -573,32 +532,21 @@ void IREmitter::emitReturnStmt(ReturnStmt &r) {
 
 void IREmitter::emitIfStmt(IfStmt &s) {
   auto condVal = emitExpr(*s.cond);
-
   std::string condReg = condVal.reg;
   if (condVal.type && condVal.type->kind != TypeKind::Bool) {
     auto cmpReg = newReg();
-    emitToCurrentBlock(std::format("{} = icmp ne {} {}, 0", cmpReg,
-                                   llvmType(condVal.type), condVal.reg));
+    emitToCurrentBlock(std::format("{} = icmp ne {} {}, 0", cmpReg, llvmType(condVal.type), condVal.reg));
     condReg = cmpReg;
   }
 
   auto thenLabel = newLabel("then");
   auto elseLabel = newLabel("else");
   auto mergeLabel = newLabel("merge");
-
-  emitToCurrentBlock(std::format("br i1 {}, label %{}, label %{}", condReg,
-                                 thenLabel,
-                                 s.elseBranch ? elseLabel : mergeLabel));
-
+  emitToCurrentBlock(std::format("br i1 {}, label %{}, label %{}", condReg, thenLabel, s.elseBranch ? elseLabel : mergeLabel));
   beginBlock(thenLabel);
-  if (s.thenBranch)
-    emitStmt(*s.thenBranch);
-  bool thenTerminated = !m_blocks.empty() && !m_blocks.back().instrs.empty() &&
-                        (m_blocks.back().instrs.back().starts_with("ret") ||
-                         m_blocks.back().instrs.back().starts_with("br "));
-  if (!thenTerminated)
-    emitToCurrentBlock(std::format("br label %{}", mergeLabel));
-
+  if (s.thenBranch) emitStmt(*s.thenBranch);
+  bool thenTerminated = !m_blocks.empty() && !m_blocks.back().instrs.empty() && (m_blocks.back().instrs.back().starts_with("ret") || m_blocks.back().instrs.back().starts_with("br "));
+  if (!thenTerminated) emitToCurrentBlock(std::format("br label %{}", mergeLabel));
   if (s.elseBranch) {
     beginBlock(elseLabel);
     emitStmt(*s.elseBranch);
@@ -606,8 +554,7 @@ void IREmitter::emitIfStmt(IfStmt &s) {
                           !m_blocks.back().instrs.empty() &&
                           (m_blocks.back().instrs.back().starts_with("ret") ||
                            m_blocks.back().instrs.back().starts_with("br "));
-    if (!elseTerminated)
-      emitToCurrentBlock(std::format("br label %{}", mergeLabel));
+    if (!elseTerminated) emitToCurrentBlock(std::format("br label %{}", mergeLabel));
   }
 
   beginBlock(mergeLabel);
@@ -617,77 +564,55 @@ void IREmitter::emitWhileStmt(WhileStmt &s) {
   auto headerLabel = newLabel("while.hdr");
   auto bodyLabel = newLabel("while.body");
   auto exitLabel = newLabel("while.exit");
-
   emitToCurrentBlock(std::format("br label %{}", headerLabel));
   beginBlock(headerLabel);
-
   auto condVal = emitExpr(*s.cond);
   std::string condReg = condVal.reg;
   if (condVal.type && condVal.type->kind != TypeKind::Bool) {
     auto cmpReg = newReg();
-    emitToCurrentBlock(std::format("{} = icmp ne {} {}, 0", cmpReg,
-                                   llvmType(condVal.type), condVal.reg));
+    emitToCurrentBlock(std::format("{} = icmp ne {} {}, 0", cmpReg, llvmType(condVal.type), condVal.reg));
     condReg = cmpReg;
   }
-  emitToCurrentBlock(std::format("br i1 {}, label %{}, label %{}", condReg,
-                                 bodyLabel, exitLabel));
-
+  emitToCurrentBlock(std::format("br i1 {}, label %{}, label %{}", condReg, bodyLabel, exitLabel));
   beginBlock(bodyLabel);
-  if (s.body)
-    emitStmt(*s.body);
+  if (s.body) emitStmt(*s.body);
   bool terminated = !m_blocks.empty() && !m_blocks.back().instrs.empty() &&
                     (m_blocks.back().instrs.back().starts_with("ret") ||
                      m_blocks.back().instrs.back().starts_with("br "));
-  if (!terminated)
-    emitToCurrentBlock(std::format("br label %{}", headerLabel));
-
+  if (!terminated) emitToCurrentBlock(std::format("br label %{}", headerLabel));
   beginBlock(exitLabel);
 }
 
 void IREmitter::emitForStmt(ForStmt &s) {
   auto iterVal = emitExpr(*s.iter);
-
   auto idxAlloc = "%" + s.var + ".idx";
   emitToCurrentBlock(std::format("{} = alloca i64", idxAlloc));
   emitToCurrentBlock(std::format("store i64 0, i64* {}", idxAlloc));
-
   auto headerLabel = newLabel("for.hdr");
   auto bodyLabel = newLabel("for.body");
   auto exitLabel = newLabel("for.exit");
-
   emitToCurrentBlock(std::format("br label %{}", headerLabel));
   beginBlock(headerLabel);
-
   auto idxReg = newReg();
   emitToCurrentBlock(std::format("{} = load i64, i64* {}", idxReg, idxAlloc));
-
   auto endReg = iterVal.reg;
   auto condReg = newReg();
   emitToCurrentBlock(
       std::format("{} = icmp slt i64 {}, {}", condReg, idxReg, endReg));
-  emitToCurrentBlock(std::format("br i1 {}, label %{}, label %{}", condReg,
-                                 bodyLabel, exitLabel));
-
+  emitToCurrentBlock(std::format("br i1 {}, label %{}, label %{}", condReg, bodyLabel, exitLabel));
   beginBlock(bodyLabel);
-
   auto ptrTy = SemaType::ptrTy(SemaType::i64Ty());
   m_locals[s.var] = {idxAlloc, ptrTy, true};
-
-  if (s.body)
-    emitStmt(*s.body);
-
+  if (s.body) emitStmt(*s.body);
   auto nextIdx = newReg();
   auto curIdx = newReg();
   emitToCurrentBlock(std::format("{} = load i64, i64* {}", curIdx, idxAlloc));
   emitToCurrentBlock(std::format("{} = add i64 {}, 1", nextIdx, curIdx));
   emitToCurrentBlock(std::format("store i64 {}, i64* {}", nextIdx, idxAlloc));
-
   bool terminated = !m_blocks.empty() && !m_blocks.back().instrs.empty() &&
                     (m_blocks.back().instrs.back().starts_with("ret") ||
                      m_blocks.back().instrs.back().starts_with("br "));
-  if (!terminated)
-    emitToCurrentBlock(std::format("br label %{}", headerLabel));
-
+  if (!terminated) emitToCurrentBlock(std::format("br label %{}", headerLabel));
   beginBlock(exitLabel);
 }
 
@@ -696,8 +621,7 @@ void IREmitter::emitDeferStmt(DeferStmt &s) {
 }
 
 void IREmitter::emitDeferred() {
-  for (auto it = m_deferStack.rbegin(); it != m_deferStack.rend(); ++it)
-    emitExpr(**it);
+  for (auto it = m_deferStack.rbegin(); it != m_deferStack.rend(); ++it) emitExpr(**it);
 }
 
 IRValue IREmitter::emitExpr(Node &n) {
@@ -761,8 +685,7 @@ IRValue IREmitter::emitIntLit(IntLit &e) {
 
 IRValue IREmitter::emitFloatLit(FloatLit &e) {
   auto s = std::format("{:.17g}", e.value);
-  if (s.find('.') == std::string::npos && s.find('e') == std::string::npos && s.find('E') == std::string::npos)
-    s += ".0";
+  if (s.find('.') == std::string::npos && s.find('e') == std::string::npos && s.find('E') == std::string::npos) s += ".0";
   return {s, SemaType::f64Ty(), false};
 }
 
@@ -785,13 +708,9 @@ IRValue IREmitter::emitStringLit(StringLit &e) {
       escaped += c;
   }
   escaped += "\\00";
-  m_stringLits.push_back(
-      std::format("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\"",
-                  idx, len, escaped));
+  m_stringLits.push_back(std::format("@.str.{} = private unnamed_addr constant [{} x i8] c\"{}\"", idx, len, escaped));
   auto reg = newReg();
-  emitToCurrentBlock(std::format(
-      "{} = getelementptr [{} x i8], [{} x i8]* @.str.{}, i64 0, i64 0", reg,
-      len, len, idx));
+  emitToCurrentBlock(std::format("{} = getelementptr [{} x i8], [{} x i8]* @.str.{}, i64 0, i64 0", reg, len, len, idx));
   return {reg, SemaType::ptrTy(SemaType::u8Ty()), false};
 }
 
@@ -866,24 +785,20 @@ IRValue IREmitter::emitBinaryExpr(BinaryExpr &e) {
   };
 
   bool isLogical = e.op == TokenKind::AmpAmp || e.op == TokenKind::PipePipe;
-
   if (isLogical) {
     std::string logOp = e.op == TokenKind::AmpAmp ? "and" : "or";
-    emitToCurrentBlock(
-        std::format("{} = {} i1 {}, {}", reg, logOp, lhs.reg, rhs.reg));
+    emitToCurrentBlock(std::format("{} = {} i1 {}, {}", reg, logOp, lhs.reg, rhs.reg));
     return {reg, SemaType::boolTy(), false};
   }
 
   if (isCmp(e.op)) {
     std::string op = isFloat ? fcmpOp(e.op) : icmpOp(e.op, isSigned);
-    emitToCurrentBlock(
-        std::format("{} = {} {} {}, {}", reg, op, tyStr, lhs.reg, rhs.reg));
+    emitToCurrentBlock(std::format("{} = {} {} {}, {}", reg, op, tyStr, lhs.reg, rhs.reg));
     return {reg, SemaType::boolTy(), false};
   }
 
   std::string op = isFloat ? floatOp(e.op) : intOp(e.op, isSigned);
-  emitToCurrentBlock(
-      std::format("{} = {} {} {}, {}", reg, op, tyStr, lhs.reg, rhs.reg));
+  emitToCurrentBlock(std::format("{} = {} {} {}, {}", reg, op, tyStr, lhs.reg, rhs.reg));
   return {reg, ty, false};
 }
 
@@ -893,10 +808,7 @@ IRValue IREmitter::emitUnaryExpr(UnaryExpr &e) {
     auto reg = newReg();
     auto ty = val.type ? val.type : SemaType::i64Ty();
     auto tys = llvmType(ty);
-    if (e.op == TokenKind::PlusPlus)
-      emitToCurrentBlock(std::format("{} = add {} {}, 1", reg, tys, val.reg));
-    else
-      emitToCurrentBlock(std::format("{} = sub {} {}, 1", reg, tys, val.reg));
+    if (e.op == TokenKind::PlusPlus) emitToCurrentBlock(std::format("{} = add {} {}, 1", reg, tys, val.reg)); else emitToCurrentBlock(std::format("{} = sub {} {}, 1", reg, tys, val.reg));
     return {val.reg, ty, false};
   }
 
@@ -908,8 +820,7 @@ IRValue IREmitter::emitUnaryExpr(UnaryExpr &e) {
     if (e.operand->kind == NodeKind::IdentExpr) {
       auto &id = static_cast<IdentExpr &>(*e.operand);
       auto it = m_locals.find(id.name);
-      if (it != m_locals.end())
-        return it->second;
+      if (it != m_locals.end())return it->second;
     }
     auto val = emitExpr(*e.operand);
     return {val.reg, SemaType::ptrTy(val.type), true};
@@ -919,7 +830,6 @@ IRValue IREmitter::emitUnaryExpr(UnaryExpr &e) {
   auto ty = val.type ? val.type : SemaType::i64Ty();
   auto tys = llvmType(ty);
   auto reg = newReg();
-
   if (e.op == TokenKind::Minus) {
     if (ty->isFloat())
       emitToCurrentBlock(std::format("{} = fneg {} {}", reg, tys, val.reg));
@@ -935,18 +845,14 @@ IRValue IREmitter::emitUnaryExpr(UnaryExpr &e) {
 
 IRValue IREmitter::emitCallExpr(CallExpr &e) {
   std::string calleeName;
-  if (e.callee->kind == NodeKind::IdentExpr)
-    calleeName = static_cast<IdentExpr &>(*e.callee).name;
+  if (e.callee->kind == NodeKind::IdentExpr) calleeName = static_cast<IdentExpr &>(*e.callee).name;
   else if (e.callee->kind == NodeKind::PathExpr) {
     auto &p = static_cast<PathExpr &>(*e.callee);
-    if (!p.segments.empty())
-      calleeName = p.segments.back();
+    if (!p.segments.empty()) calleeName = p.segments.back();
   }
 
   std::vector<IRValue> argVals;
-  for (auto &a : e.args)
-    argVals.push_back(emitExpr(*a));
-
+  for (auto &a : e.args) argVals.push_back(emitExpr(*a));
   auto calleeTy = m_sema.inferExpr(*e.callee);
   TypeRef retTy = SemaType::voidTy();
   std::vector<TypeRef> paramTys;
@@ -957,9 +863,7 @@ IRValue IREmitter::emitCallExpr(CallExpr &e) {
 
   std::string argStr;
   for (size_t i = 0; i < argVals.size(); ++i) {
-    if (i)
-      argStr += ", ";
-
+    if (i) argStr += ", ";
     auto &val = argVals[i];
     TypeRef wantTy;
     if (i < paramTys.size()) wantTy = paramTys[i];
@@ -1004,14 +908,12 @@ IRValue IREmitter::emitCallExpr(CallExpr &e) {
   }
 
   std::string retStr = llvmType(retTy);
-
   if (retTy->kind == TypeKind::Void) {
     emitToCurrentBlock(std::format("call void @{}({})", calleeName, argStr));
     return {newReg(), retTy, false};
   } else {
     auto reg = newReg();
-    emitToCurrentBlock(
-        std::format("{} = call {} @{}({})", reg, retStr, calleeName, argStr));
+    emitToCurrentBlock(std::format("{} = call {} @{}({})", reg, retStr, calleeName, argStr));
     return {reg, retTy, false};
   }
 }
@@ -1023,7 +925,6 @@ IRValue IREmitter::emitCastExpr(CastExpr &e) {
   auto srcStr = llvmType(srcTy);
   auto dstStr = llvmType(dstTy);
   auto reg = newReg();
-
   if (srcTy->isInt() && dstTy->isInt()) {
     auto srcBits = srcStr == "i64"   ? 64
                    : srcStr == "i32" ? 32
@@ -1068,7 +969,6 @@ IRValue IREmitter::emitCastExpr(CastExpr &e) {
 
 IRValue IREmitter::emitAssignExpr(AssignExpr &e) {
   auto rhs = emitExpr(*e.rhs);
-
   if (e.lhs->kind == NodeKind::IdentExpr) {
     auto &id = static_cast<IdentExpr &>(*e.lhs);
     auto it = m_locals.find(id.name);
@@ -1095,14 +995,11 @@ IRValue IREmitter::emitAssignExpr(AssignExpr &e) {
                   : e.op == TokenKind::CaretEq ? TokenKind::Caret
                                                : TokenKind::Percent,
                   true);
-        emitToCurrentBlock(std::format("{} = {} {} {}, {}", newReg_, op, tyStr,
-                                       oldVal.reg, rhs.reg));
-        emitToCurrentBlock(std::format("store {} {}, {}* {}", tyStr, newReg_,
-                                       tyStr, ptr->reg));
+        emitToCurrentBlock(std::format("{} = {} {} {}, {}", newReg_, op, tyStr, oldVal.reg, rhs.reg));
+        emitToCurrentBlock(std::format("store {} {}, {}* {}", tyStr, newReg_, tyStr, ptr->reg));
         return {newReg_, ty, false};
       }
-      emitToCurrentBlock(std::format("store {} {}, {}* {}", tyStr, rhs.reg,
-                                     tyStr, ptr->reg));
+      emitToCurrentBlock(std::format("store {} {}, {}* {}", tyStr, rhs.reg, tyStr, ptr->reg));
       return rhs;
     }
   }
@@ -1152,8 +1049,7 @@ IRValue IREmitter::emitAssignExpr(AssignExpr &e) {
   auto lhsPtr = emitExpr(*e.lhs);
   auto ty = rhs.type ? rhs.type : SemaType::i64Ty();
   auto tyStr = llvmType(ty);
-  emitToCurrentBlock(
-      std::format("store {} {}, {}* {}", tyStr, rhs.reg, tyStr, lhsPtr.reg));
+  emitToCurrentBlock(std::format("store {} {}, {}* {}", tyStr, rhs.reg, tyStr, lhsPtr.reg));
   return rhs;
 }
 
@@ -1161,8 +1057,7 @@ IRValue IREmitter::emitStructExpr(StructExpr &e) {
   TypeRef structTy = SemaType::voidTy();
   if (!e.path.empty()) {
     auto sym = m_sema.lookupSymbol(e.path.back());
-    if (sym && sym->type)
-      structTy = sym->type;
+    if (sym && sym->type) structTy = sym->type;
   }
   std::string tyStr = llvmType(structTy);
   std::string cur = newReg();
@@ -1171,15 +1066,12 @@ IRValue IREmitter::emitStructExpr(StructExpr &e) {
     return {cur, structTy, false};
   }
   auto firstVal = emitExpr(*e.fields[0]->value);
-  emitToCurrentBlock(std::format("{} = insertvalue {} zeroinitializer, {} {}, 0",
-                                 cur, tyStr, llvmType(firstVal.type), firstVal.reg));
+  emitToCurrentBlock(std::format("{} = insertvalue {} zeroinitializer, {} {}, 0", cur, tyStr, llvmType(firstVal.type), firstVal.reg));
   for (size_t i = 1; i < e.fields.size(); ++i) {
-    if (!e.fields[i] || !e.fields[i]->value)
-      continue;
+    if (!e.fields[i] || !e.fields[i]->value) continue;
     auto val = emitExpr(*e.fields[i]->value);
     auto nxt = newReg();
-    emitToCurrentBlock(std::format("{} = insertvalue {} {}, {} {}, {}", nxt, tyStr, cur,
-                                   llvmType(val.type), val.reg, i));
+    emitToCurrentBlock(std::format("{} = insertvalue {} {}, {} {}, {}", nxt, tyStr, cur, llvmType(val.type), val.reg, i));
     cur = nxt;
   }
   return {cur, structTy, false};
@@ -1193,15 +1085,13 @@ IRValue IREmitter::emitFieldExpr(FieldExpr &e) {
     for (size_t i = 0; i < obj.type->fieldNames.size(); ++i) {
       if (obj.type->fieldNames[i] == e.field) {
         fieldIdx = i;
-        if (i < obj.type->params.size())
-          fieldTy = obj.type->params[i];
+        if (i < obj.type->params.size()) fieldTy = obj.type->params[i];
         break;
       }
     }
   }
   auto reg = newReg();
-  emitToCurrentBlock(std::format("{} = extractvalue {} {}, {}", reg,
-                                 llvmType(obj.type), obj.reg, fieldIdx));
+  emitToCurrentBlock(std::format("{} = extractvalue {} {}, {}", reg, llvmType(obj.type), obj.reg, fieldIdx));
   return {reg, fieldTy, false};
 }
 
@@ -1209,13 +1099,10 @@ IRValue IREmitter::emitIndexExpr(IndexExpr &e) {
   auto obj = emitExpr(*e.obj);
   auto idx = emitExpr(*e.idx);
   auto reg = newReg();
-  auto elemTy =
-      obj.type && obj.type->inner ? obj.type->inner : SemaType::i64Ty();
-
+  auto elemTy = obj.type && obj.type->inner ? obj.type->inner : SemaType::i64Ty();
   if (obj.type && obj.type->kind == TypeKind::Slice) {
     auto ptr = newReg();
-    emitToCurrentBlock(
-        std::format("{} = extractvalue {} {}, 0", ptr, llvmType(obj.type), obj.reg));
+    emitToCurrentBlock(std::format("{} = extractvalue {} {}, 0", ptr, llvmType(obj.type), obj.reg));
     auto gep = newReg();
     emitToCurrentBlock(std::format("{} = getelementptr {}, {}* {}, i64 {}", gep,
                                    llvmType(elemTy), llvmType(elemTy), ptr,
@@ -1242,8 +1129,7 @@ IRValue IREmitter::emitExtensionNode(ExtensionNode &n) {
     m_out << n.irFragment << "\n";
   }
   for (auto &c : n.children)
-    if (c)
-      emitExpr(*c);
+    if (c) emitExpr(*c);
   return {newReg(), SemaType::voidTy(), false};
 }
 
@@ -1261,15 +1147,12 @@ IRValue IREmitter::emitAsmExpr(AsmExpr &n) {
   }
 
   if (n.isBlock) {
-    emitToCurrentBlock(std::format(
-        "call void asm sideeffect \"{}\", \"\"()",
-        templateStr));
+    emitToCurrentBlock(std::format("call void asm sideeffect \"{}\", \"\"()", templateStr));
     return {newReg(), SemaType::voidTy(), false};
   }
 
   std::string constraints;
   std::vector<std::pair<std::string, std::string>> inputArgs;
-
   auto inferType = [](const std::string &c) -> std::string {
     std::string base = c;
     if (!base.empty() && base[0] == '=')
@@ -1288,23 +1171,19 @@ IRValue IREmitter::emitAsmExpr(AsmExpr &n) {
 
   std::string outType = "i64";
   for (auto &out : n.outputs) {
-    if (!constraints.empty())
-      constraints += ",";
+    if (!constraints.empty()) constraints += ",";
     constraints += out.constraint;
     outType = inferType(out.constraint);
   }
 
   for (auto &inp : n.inputs) {
-    if (!constraints.empty())
-      constraints += ",";
+    if (!constraints.empty()) constraints += ",";
     constraints += inp.constraint;
     auto val = emitExpr(*inp.expr);
     std::string ty = inferType(inp.constraint);
     if (ty != llvmType(val.type)) {
       auto truncReg = newReg();
-      emitToCurrentBlock(
-          std::format("{} = trunc {} {} to {}", truncReg, llvmType(val.type),
-                      val.reg, ty));
+      emitToCurrentBlock(std::format("{} = trunc {} {} to {}", truncReg, llvmType(val.type), val.reg, ty));
       inputArgs.push_back({ty, truncReg});
     } else {
       inputArgs.push_back({llvmType(val.type), val.reg});
@@ -1317,8 +1196,7 @@ IRValue IREmitter::emitAsmExpr(AsmExpr &n) {
 
   std::string argStr;
   for (size_t i = 0; i < inputArgs.size(); ++i) {
-    if (i)
-      argStr += ", ";
+    if (i) argStr += ", ";
     argStr += inputArgs[i].first + " " + inputArgs[i].second;
   }
 
@@ -1330,8 +1208,7 @@ IRValue IREmitter::emitAsmExpr(AsmExpr &n) {
         reg, outType, templateStr, constraints, argStr));
     if (outType != "i64") {
       auto zextReg = newReg();
-      emitToCurrentBlock(
-          std::format("{} = zext {} {} to i64", zextReg, outType, reg));
+      emitToCurrentBlock(std::format("{} = zext {} {} to i64", zextReg, outType, reg));
       reg = zextReg;
     }
     for (auto &out : n.outputs) {
@@ -1351,5 +1228,4 @@ IRValue IREmitter::emitAsmExpr(AsmExpr &n) {
     return {reg, SemaType::voidTy(), false};
   }
 }
-
-} // namespace lumora
+}

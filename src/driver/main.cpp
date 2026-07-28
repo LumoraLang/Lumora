@@ -5,7 +5,6 @@
 #include <span>
 #include <string>
 #include <vector>
-
 static void printUsage(std::string_view argv0) {
   std::cerr << "Usage: " << argv0
             << " [options] [files...]\n"
@@ -77,11 +76,8 @@ int main(int argc, char **argv) {
     confDir = std::filesystem::absolute(confPath).parent_path();
   }
 
-  for (auto &d : extDirs)
-    cfg.extensionDirs.push_back(d);
-  if (!outputDir.empty())
-    cfg.outputDir = outputDir;
-
+  for (auto &d : extDirs) cfg.extensionDirs.push_back(d);
+  if (!outputDir.empty()) cfg.outputDir = outputDir;
   if (cfg.multiboot) opts.multiboot = true;
   if (!confDir.empty()) {
     cfg.outputDir = (confDir / cfg.outputDir).string();
@@ -121,7 +117,6 @@ int main(int argc, char **argv) {
   }
 
   lumora::Pipeline pipeline(std::move(cfg), opts);
-
   if (!pipeline.run()) {
     std::cerr << "lumorac: \x1b[31merror\x1b[0m: build failed\n";
     return 1;

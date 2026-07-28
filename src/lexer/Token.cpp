@@ -1,8 +1,6 @@
 #include "lumora/Token.h"
 #include <array>
-
 namespace lumora {
-
 static constexpr std::array<std::string_view, static_cast<size_t>(TokenKind::_Count)> kNames = {
     "eof",
     "(", ")", "{", "}", "[", "]",
@@ -42,5 +40,4 @@ std::string_view tokenKindName(TokenKind k) noexcept {
 std::string_view Token::kindName() const noexcept {
     return tokenKindName(kind);
 }
-
-} 
+}

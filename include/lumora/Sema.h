@@ -107,5 +107,4 @@ private:
     TypeRef resolveTypeNode(ast::Node& n);
     std::unordered_map<std::string, TypeRef> m_typeEnv;
 };
-
 }

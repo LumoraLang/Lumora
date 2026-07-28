@@ -24,11 +24,11 @@ Lumora is a modern, statically-typed programming language compiler built with C+
 
 |               [OpenGL Triangle](example/opengl)                   |                     [Raylib](example/raylib)                         |
 | :-----------------------------------------------------------: | :--------------------------------------------------------------------------------------------: |
-| <img width="935" height="688" alt="image" src="https://github.com/user-attachments/assets/e0f55544-4b15-4df1-a9de-4808606be248" /> | <img width="832" height="656" alt="image" src="https://github.com/user-attachments/assets/c405ad30-90be-423a-b8a1-9f9851efb2bb" /> |
+| <img width="935" height="688" alt="image" src="https://github.com/user-attachments/assets/e0f55544-4b15-4df1-a9de-4808606be248" /> | <img width="935" height="688" alt="image" src="https://github.com/user-attachments/assets/c405ad30-90be-423a-b8a1-9f9851efb2bb" /> |
 
 |                  [Kernel](example/kernel)                     |                 [GTK3](example/gtk3_editor)                    |
 | :------------------------------------------------------------------------: | :------------------------------------------------------------------: |
-| <img width="752" height="483" alt="image" src="https://github.com/user-attachments/assets/683aa3d7-b51a-43d6-81c6-f05a3d8e37fe" /> | <img width="832" height="656" alt="image" src="https://github.com/user-attachments/assets/0b32988c-e44f-4970-8a6e-7427f9844ed9" /> |
+| <img width="935" height="688" alt="image" src="https://github.com/user-attachments/assets/683aa3d7-b51a-43d6-81c6-f05a3d8e37fe" /> | <img width="935" height="688" alt="image" src="https://github.com/user-attachments/assets/0b32988c-e44f-4970-8a6e-7427f9844ed9" /> |
 
 
 ## Features
@@ -69,19 +69,19 @@ This will generate an executable in the `build/` directory (e.g., `build/myapp`)
 ### Command Line Options
 
 ```
-Usage: ./lumorac [options] [files...]
-
+Usage: lumorac [options] [files...]
 Options:
   --conf <file>     Use specified lumora.conf (default: lumora.conf)
   --dump-tokens     Print tokens and exit
   --dump-ast        Print AST and exit
   --dump-ir         Print generated LLVM IR
   --stop-ir         Stop after IR emission (no opt/link)
-  --no-opt          Skip optimization steps
+  --multiboot       Generate multiboot boot stub (.boot.S)
+  --no-opt          Skip opt step
   --verbose         Verbose build output
   --ext-dir <dir>   Load extensions from directory
   --output <dir>    Override output directory
-  -h, --help        Print help message
+  -h, --help        Print this help
 ```
 
 ## Extensions

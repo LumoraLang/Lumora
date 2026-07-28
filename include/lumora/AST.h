@@ -6,37 +6,27 @@
 #include <optional>
 #include <variant>
 #include <functional>
-
 namespace lumora::ast {
-
 struct Node;
 using NodePtr  = std::unique_ptr<Node>;
 using NodeList = std::vector<NodePtr>;
-
 enum class NodeKind : uint32_t {
     Module,
-
     FnDecl, ParamDecl, StructDecl, FieldDecl,
     EnumDecl, EnumVariant, TraitDecl, ImplDecl,
     TypeAlias, UseDecl, ModDecl, ExternDecl,
-
     BlockStmt, LetStmt, ReturnStmt, IfStmt, WhileStmt,
     ForStmt, BreakStmt, ContinueStmt, ExprStmt, DeferStmt,
-
     BinaryExpr, UnaryExpr, CallExpr, IndexExpr, FieldExpr,
     CastExpr, AssignExpr, MatchExpr, MatchArm,
     ArrayExpr, StructExpr, StructExprField,
     LambdaExpr, SizeofExpr, AlignofExpr, TypeofExpr,
     OffsetofExpr,
-
     IntLit, FloatLit, StringLit, CharLit, BoolLit, NullLit,
     IdentExpr, PathExpr,
-
     AsmExpr,
-
     PrimType, PtrType, RefType, SliceType, ArrayType,
     FnType, NamedType, TupleType,
-
     ExtensionNode,
 };
 
@@ -47,7 +37,6 @@ struct Node {
 };
 
 using TypePtr = std::unique_ptr<Node>;
-
 struct Attribute {
     std::string        name;
     std::vector<Token> args;
@@ -229,10 +218,8 @@ struct ForStmt : TypedNode<NodeKind::ForStmt> {
 
 struct BreakStmt    : TypedNode<NodeKind::BreakStmt>    { std::optional<std::string> label; };
 struct ContinueStmt : TypedNode<NodeKind::ContinueStmt> { std::optional<std::string> label; };
-
 struct ExprStmt : TypedNode<NodeKind::ExprStmt> { NodePtr expr; };
 struct DeferStmt : TypedNode<NodeKind::DeferStmt> { NodePtr expr; };
-
 struct BinaryExpr : TypedNode<NodeKind::BinaryExpr> {
     TokenKind op;
     NodePtr   lhs;
@@ -307,7 +294,6 @@ struct LambdaExpr : TypedNode<NodeKind::LambdaExpr> {
 struct SizeofExpr   : TypedNode<NodeKind::SizeofExpr>   { TypePtr ty; };
 struct AlignofExpr  : TypedNode<NodeKind::AlignofExpr>  { TypePtr ty; };
 struct TypeofExpr   : TypedNode<NodeKind::TypeofExpr>   { NodePtr expr; };
-
 struct OffsetofExpr : TypedNode<NodeKind::OffsetofExpr> {
     TypePtr     ty;
     std::string field;
@@ -319,9 +305,7 @@ struct StringLit : TypedNode<NodeKind::StringLit> { std::string value; };
 struct CharLit   : TypedNode<NodeKind::CharLit>   { char        value = 0; };
 struct BoolLit   : TypedNode<NodeKind::BoolLit>   { bool        value = false; };
 struct NullLit   : TypedNode<NodeKind::NullLit>   {};
-
 struct IdentExpr : TypedNode<NodeKind::IdentExpr> { std::string name; };
-
 struct PathExpr : TypedNode<NodeKind::PathExpr> {
     std::vector<std::string> segments;
     std::vector<TypePtr>     typeArgs;
@@ -349,5 +333,4 @@ struct ExtensionNode : TypedNode<NodeKind::ExtensionNode> {
 
 using ASTVisitorFn = std::function<bool(Node&)>;
 void walkAST(Node& root, ASTVisitorFn pre, ASTVisitorFn post = {});
-
-} 
+}

@@ -1,10 +1,7 @@
 #include "lumora/AST.h"
 #include <stdexcept>
-
 namespace lumora::ast {
-
 static void walkChildren(Node& n, ASTVisitorFn& pre, ASTVisitorFn& post);
-
 void walkAST(Node& root, ASTVisitorFn pre, ASTVisitorFn post) {
     if (pre && !pre(root)) return;
     walkChildren(root, pre, post);
@@ -132,5 +129,4 @@ static void walkChildren(Node& n, ASTVisitorFn& pre, ASTVisitorFn& post) {
             break;
     }
 }
-
-} 
+}

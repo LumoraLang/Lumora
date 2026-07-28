@@ -2,25 +2,18 @@
 #include <format>
 #include <stdexcept>
 #include <regex>
-
 namespace lumora {
-
 using namespace ast;
-
 Parser::Parser(Lexer& lex) : m_lex(lex) {}
-
 void Parser::registerExtension(ParserExtensionPoint ext) {
     m_extensions.push_back(std::move(ext));
 }
 
 const std::vector<ParseError>& Parser::errors() const noexcept { return m_errors; }
 bool Parser::hasErrors() const noexcept { return !m_errors.empty(); }
-
 Token Parser::peek(size_t n) { return m_lex.peek(n); }
-Token Parser::eat()          { return m_lex.next(); }
-
+Token Parser::eat() { return m_lex.next(); }
 bool Parser::check(TokenKind k) { return peek().is(k); }
-
 bool Parser::match(TokenKind k) {
     if (check(k)) { eat(); return true; }
     return false;
@@ -57,7 +50,6 @@ std::unique_ptr<Module> Parser::parseModule(std::string_view filename) {
     auto mod = std::make_unique<Module>();
     mod->file = std::string(filename);
     mod->loc  = peek().loc;
-
     while (!check(TokenKind::Eof)) {
         try {
             auto item = parseTopLevelItem();
@@ -94,7 +86,7 @@ NodePtr Parser::tryExtension() {
         for (auto& ext : m_extensions) {
             std::regex re(ext.triggerPattern);
             if (std::regex_match(nextTok.raw, re)) {
-                eat(); // @
+                eat(); //neo: the at (@) lmao
                 auto trigger = eat();
                 return ext.handler(*this, trigger);
             }
@@ -114,11 +106,8 @@ NodePtr Parser::tryExtension() {
 
 NodePtr Parser::parseTopLevelItem() {
     auto attrs = parseAttributes();
-
     if (auto extNode = tryExtension()) return extNode;
-
     bool isPub = match(TokenKind::KwPub);
-
     switch (peek().kind) {
         case TokenKind::KwFn:     return parseFnDecl(isPub);
         case TokenKind::KwStruct: return parseStructDecl(isPub);
@@ -144,7 +133,6 @@ std::unique_ptr<FnDecl> Parser::parseFnDecl(bool isPub) {
     fn->isPub = isPub;
     expect(TokenKind::KwFn);
     fn->name = expect(TokenKind::Ident).raw;
-
     if (match(TokenKind::Lt)) {
         while (!check(TokenKind::Gt) && !check(TokenKind::Eof)) {
             fn->generics.push_back(expect(TokenKind::Ident).raw);
@@ -155,9 +143,9 @@ std::unique_ptr<FnDecl> Parser::parseFnDecl(bool isPub) {
 
     expect(TokenKind::LParen);
     while (!check(TokenKind::RParen) && !check(TokenKind::Eof)) {
-        auto p    = std::make_unique<ParamDecl>();
-        p->loc    = peek().loc;
-        p->isMut  = match(TokenKind::KwMut);
+        auto p = std::make_unique<ParamDecl>();
+        p->loc = peek().loc;
+        p->isMut = match(TokenKind::KwMut);
         if (check(TokenKind::Ellipsis)) {
             eat();
             p->isVararg = true;
@@ -172,12 +160,8 @@ std::unique_ptr<FnDecl> Parser::parseFnDecl(bool isPub) {
         if (!match(TokenKind::Comma)) break;
     }
     expect(TokenKind::RParen);
-
     if (match(TokenKind::Arrow)) fn->retTy = parseType();
-
-    if (check(TokenKind::LBrace)) fn->body = parseBlock();
-    else                          expect(TokenKind::Semicolon);
-
+    if (check(TokenKind::LBrace)) fn->body = parseBlock(); else expect(TokenKind::Semicolon);
     return fn;
 }
 
@@ -187,13 +171,12 @@ std::unique_ptr<StructDecl> Parser::parseStructDecl(bool isPub) {
     s->isPub = isPub;
     expect(TokenKind::KwStruct);
     s->name = expect(TokenKind::Ident).raw;
-
     expect(TokenKind::LBrace);
     while (!check(TokenKind::RBrace) && !check(TokenKind::Eof)) {
-        auto f    = std::make_unique<FieldDecl>();
-        f->loc    = peek().loc;
-        f->isPub  = match(TokenKind::KwPub);
-        f->name   = expect(TokenKind::Ident).raw;
+        auto f = std::make_unique<FieldDecl>();
+        f->loc = peek().loc;
+        f->isPub = match(TokenKind::KwPub);
+        f->name = expect(TokenKind::Ident).raw;
         expect(TokenKind::Colon);
         f->ty = parseType();
         if (match(TokenKind::Eq)) f->defaultVal = parseExpr();
@@ -205,15 +188,15 @@ std::unique_ptr<StructDecl> Parser::parseStructDecl(bool isPub) {
 }
 
 std::unique_ptr<EnumDecl> Parser::parseEnumDecl(bool isPub) {
-    auto e  = std::make_unique<EnumDecl>();
-    e->loc  = peek().loc;
+    auto e = std::make_unique<EnumDecl>();
+    e->loc = peek().loc;
     e->isPub = isPub;
     expect(TokenKind::KwEnum);
     e->name = expect(TokenKind::Ident).raw;
     expect(TokenKind::LBrace);
     while (!check(TokenKind::RBrace) && !check(TokenKind::Eof)) {
         auto v = std::make_unique<EnumVariant>();
-        v->loc  = peek().loc;
+        v->loc = peek().loc;
         v->name = expect(TokenKind::Ident).raw;
         if (match(TokenKind::LParen)) {
             while (!check(TokenKind::RParen) && !check(TokenKind::Eof)) {
@@ -249,8 +232,8 @@ std::unique_ptr<ImplDecl> Parser::parseImplDecl() {
 }
 
 std::unique_ptr<TraitDecl> Parser::parseTraitDecl(bool isPub) {
-    auto t  = std::make_unique<TraitDecl>();
-    t->loc  = peek().loc;
+    auto t = std::make_unique<TraitDecl>();
+    t->loc = peek().loc;
     t->isPub = isPub;
     expect(TokenKind::KwTrait);
     t->name = expect(TokenKind::Ident).raw;
@@ -264,8 +247,8 @@ std::unique_ptr<TraitDecl> Parser::parseTraitDecl(bool isPub) {
 }
 
 std::unique_ptr<TypeAlias> Parser::parseTypeAlias(bool isPub) {
-    auto a  = std::make_unique<TypeAlias>();
-    a->loc  = peek().loc;
+    auto a = std::make_unique<TypeAlias>();
+    a->loc = peek().loc;
     a->isPub = isPub;
     expect(TokenKind::KwType);
     a->name = expect(TokenKind::Ident).raw;
@@ -276,8 +259,8 @@ std::unique_ptr<TypeAlias> Parser::parseTypeAlias(bool isPub) {
 }
 
 std::unique_ptr<UseDecl> Parser::parseUseDecl(bool isPub) {
-    auto u  = std::make_unique<UseDecl>();
-    u->loc  = peek().loc;
+    auto u = std::make_unique<UseDecl>();
+    u->loc = peek().loc;
     u->isPub = isPub;
     expect(TokenKind::KwUse);
     u->path.push_back(expect(TokenKind::Ident).raw);
@@ -288,15 +271,14 @@ std::unique_ptr<UseDecl> Parser::parseUseDecl(bool isPub) {
 }
 
 std::unique_ptr<ModDecl> Parser::parseModDecl(bool isPub) {
-    auto m  = std::make_unique<ModDecl>();
-    m->loc  = peek().loc;
+    auto m = std::make_unique<ModDecl>();
+    m->loc = peek().loc;
     m->isPub = isPub;
     expect(TokenKind::KwMod);
     m->name = expect(TokenKind::Ident).raw;
     if (check(TokenKind::LBrace)) {
         eat();
-        while (!check(TokenKind::RBrace) && !check(TokenKind::Eof))
-            m->items.push_back(parseTopLevelItem());
+        while (!check(TokenKind::RBrace) && !check(TokenKind::Eof)) m->items.push_back(parseTopLevelItem());
         expect(TokenKind::RBrace);
     } else {
         expect(TokenKind::Semicolon);
@@ -331,15 +313,13 @@ std::unique_ptr<BlockStmt> Parser::parseBlock() {
     auto b = std::make_unique<BlockStmt>();
     b->loc = peek().loc;
     expect(TokenKind::LBrace);
-    while (!check(TokenKind::RBrace) && !check(TokenKind::Eof))
-        b->stmts.push_back(parseStmt());
+    while (!check(TokenKind::RBrace) && !check(TokenKind::Eof)) b->stmts.push_back(parseStmt());
     expect(TokenKind::RBrace);
     return b;
 }
 
 NodePtr Parser::parseStmt() {
     if (auto extNode = tryExtension()) return extNode;
-
     switch (peek().kind) {
         case TokenKind::KwLet:      return parseLetStmt();
         case TokenKind::KwConst:    return parseLetStmt();
@@ -382,8 +362,8 @@ NodePtr Parser::parseStmt() {
 }
 
 NodePtr Parser::parseLetStmt(bool isPub) {
-    auto l   = std::make_unique<LetStmt>();
-    l->loc   = peek().loc;
+    auto l = std::make_unique<LetStmt>();
+    l->loc = peek().loc;
     l->isPub = isPub;
     l->isConst = check(TokenKind::KwConst);
     eat();
@@ -397,9 +377,8 @@ NodePtr Parser::parseLetStmt(bool isPub) {
 
 NodePtr Parser::parseReturnStmt() {
     auto r = std::make_unique<ReturnStmt>();
-    r->loc  = eat().loc;
-    if (!check(TokenKind::Semicolon) && !check(TokenKind::RBrace))
-        r->value = parseExpr();
+    r->loc = eat().loc;
+    if (!check(TokenKind::Semicolon) && !check(TokenKind::RBrace)) r->value = parseExpr();
     match(TokenKind::Semicolon);
     return r;
 }
@@ -407,7 +386,7 @@ NodePtr Parser::parseReturnStmt() {
 NodePtr Parser::parseIfStmt() {
     auto s = std::make_unique<IfStmt>();
     s->loc = eat().loc;
-    s->cond       = parseExpr();
+    s->cond = parseExpr();
     s->thenBranch = parseBlock();
     if (match(TokenKind::KwElse)) {
         if (check(TokenKind::KwIf)) s->elseBranch = parseIfStmt();
@@ -436,7 +415,7 @@ NodePtr Parser::parseForStmt() {
 
 NodePtr Parser::parseDeferStmt() {
     auto d = std::make_unique<DeferStmt>();
-    d->loc  = eat().loc;
+    d->loc = eat().loc;
     d->expr = parseExpr();
     match(TokenKind::Semicolon);
     return d;
@@ -557,15 +536,14 @@ bool Parser::isAssignOp(TokenKind k) const noexcept {
 
 NodePtr Parser::parseExpr(int minPrec) {
     auto lhs = parseUnaryExpr();
-
     if (isAssignOp(peek().kind)) {
-        auto op  = eat();
+        auto op = eat();
         auto rhs = parseExpr(0);
-        auto a   = std::make_unique<AssignExpr>();
-        a->loc   = op.loc;
-        a->op    = op.kind;
-        a->lhs   = std::move(lhs);
-        a->rhs   = std::move(rhs);
+        auto a = std::make_unique<AssignExpr>();
+        a->loc = op.loc;
+        a->op = op.kind;
+        a->lhs = std::move(lhs);
+        a->rhs = std::move(rhs);
         return a;
     }
 
@@ -654,7 +632,6 @@ NodePtr Parser::parsePostfixExpr(NodePtr base) {
 
 NodePtr Parser::parsePrimaryExpr() {
     if (auto ext = tryExtension()) return ext;
-
     switch (peek().kind) {
         case TokenKind::LitInt: {
             auto t = eat();
@@ -939,5 +916,4 @@ TypePtr Parser::parseTupleType() {
     expect(TokenKind::RParen);
     return t;
 }
-
 }

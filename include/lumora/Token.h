@@ -58,5 +58,4 @@ struct Token {
 };
 
 std::string_view tokenKindName(TokenKind k) noexcept;
-
 }

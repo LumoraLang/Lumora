@@ -93,7 +93,6 @@ bool SemaType::isString() const noexcept {
 }
 
 std::string SemaType::str() const { return name; }
-
 std::optional<Symbol> Scope::lookup(std::string_view name) const {
   auto it = syms.find(std::string(name));
   if (it != syms.end())
@@ -282,7 +281,6 @@ TypeRef Sema::resolveTypeNode(Node &n) {
 }
 
 TypeRef Sema::resolveType(Node &n) { return resolveTypeNode(n); }
-
 TypeRef Sema::lookupType(const std::string &name) {
   auto it = m_typeEnv.find(name);
   if (it != m_typeEnv.end())
@@ -304,9 +302,7 @@ void Sema::analyzeFn(FnDecl &fn) {
     fnType->params.push_back(paramTy);
   }
 
-  if (fn.body)
-    analyzeBlock(static_cast<BlockStmt &>(*fn.body));
-
+  if (fn.body) analyzeBlock(static_cast<BlockStmt &>(*fn.body));
   popScope();
 }
 
@@ -383,10 +379,8 @@ void Sema::analyzeStmt(Node &n) {
   }
   case NodeKind::WhileStmt: {
     auto &s = static_cast<WhileStmt &>(n);
-    if (s.cond)
-      analyzeExpr(*s.cond);
-    if (s.body)
-      analyzeStmt(*s.body);
+    if (s.cond) analyzeExpr(*s.cond);
+    if (s.body) analyzeStmt(*s.body);
     break;
   }
   case NodeKind::ForStmt: {
@@ -395,8 +389,7 @@ void Sema::analyzeStmt(Node &n) {
       auto iterTy = analyzeExpr(*s.iter);
       pushScope();
       currentScope().define(Symbol{s.var, iterTy, true, false, &s});
-      if (s.body)
-        analyzeStmt(*s.body);
+      if (s.body) analyzeStmt(*s.body);
       popScope();
     }
     break;
@@ -451,8 +444,7 @@ TypeRef Sema::analyzeExpr(Node &n) {
         b.op == TokenKind::LtEq || b.op == TokenKind::GtEq ||
         b.op == TokenKind::AmpAmp || b.op == TokenKind::PipePipe)
       return SemaType::boolTy();
-    if (b.op == TokenKind::Plus && lty && lty->isString() && rty && rty->isString())
-      return lty;
+    if (b.op == TokenKind::Plus && lty && lty->isString() && rty && rty->isString()) return lty;
     return lty ? lty : rty;
   }
   case NodeKind::UnaryExpr: {
@@ -469,8 +461,7 @@ TypeRef Sema::analyzeExpr(Node &n) {
   case NodeKind::CallExpr: {
     auto &c = static_cast<CallExpr &>(n);
     auto calleeTy = analyzeExpr(*c.callee);
-    for (auto &a : c.args)
-      analyzeExpr(*a);
+    for (auto &a : c.args) analyzeExpr(*a);
     if (calleeTy && calleeTy->kind == TypeKind::Fn && calleeTy->ret) {
       return calleeTy->ret;
     }
@@ -498,8 +489,7 @@ TypeRef Sema::analyzeExpr(Node &n) {
         return sym->type;
     }
     for (auto &f : s.fields)
-      if (f)
-        analyzeExpr(*f->value);
+      if (f) analyzeExpr(*f->value);
     return SemaType::voidTy();
   }
   case NodeKind::IndexExpr: {
@@ -535,9 +525,7 @@ TypeRef Sema::analyzeExpr(Node &n) {
       if (ep.extensionId == ext.extensionId)
         return ep.handler(ext, *this);
     }
-    for (auto &c : ext.children)
-      if (c)
-        analyzeExpr(*c);
+    for (auto &c : ext.children) if (c) analyzeExpr(*c);
     return SemaType::voidTy();
   }
   default:
@@ -546,5 +534,4 @@ TypeRef Sema::analyzeExpr(Node &n) {
 }
 
 TypeRef Sema::inferExpr(Node &n) { return analyzeExpr(n); }
-
-} // namespace lumora
+}

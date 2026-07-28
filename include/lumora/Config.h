@@ -4,9 +4,7 @@
 #include <unordered_map>
 #include <filesystem>
 #include <optional>
-
 namespace lumora {
-
 struct LinkStep {
     std::vector<std::string> inputs;
     std::string              output;
@@ -48,11 +46,8 @@ struct LumoraConfig {
     std::vector<std::string> includeDirs;
     std::vector<std::string> defines;
     std::unordered_map<std::string, std::string> vars;
-
     static LumoraConfig loadFromFile(const std::filesystem::path& path);
     static LumoraConfig loadFromString(std::string_view content);
-
     [[nodiscard]] std::string resolve(std::string_view val) const;
 };
-
-} 
+}
