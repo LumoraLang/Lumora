@@ -1,0 +1,53 @@
+@include "glfw.lmi"
+@include "opengl.lmi"
+const RAD2DEG: f64 = 57.29577951308232;
+fn error_callback(error: i32, description: &u8) -> void {}
+fn key_callback(window: *void, key: i32, scancode: i32, action: i32, mods: i32) -> void {
+    if key == GLFW_KEY_ESCAPE && action == GLFW_PRESS {
+        glfwSetWindowShouldClose(window, GLFW_TRUE);
+    }
+}
+
+pub fn main() -> i32 {
+    glfwSetErrorCallback(error_callback as *void);
+    if glfwInit() == 0 { return 1; }
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+    let window = glfwCreateWindow(640, 480, "OpenGL Triangle", nil, nil);
+    if window == nil {
+        glfwTerminate();
+        return 1;
+    }
+
+    glfwSetKeyCallback(window, key_callback as *void);
+    glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
+    let width: i32 = 0;
+    let height: i32 = 0;
+    while glfwWindowShouldClose(window) == 0 {
+        glfwGetFramebufferSize(window, &width, &height);
+        let ratio = width as f64 / height as f64;
+        glViewport(0, 0, width, height);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glMatrixMode(GL_MODELVIEW);
+        glLoadIdentity();
+        glRotatef((glfwGetTime() * RAD2DEG) as f32, 0.0 as f32, 0.0 as f32, 1.0 as f32);
+        glMatrixMode(GL_PROJECTION);
+        glLoadIdentity();
+        glOrtho(-ratio, ratio, -1.0, 1.0, 1.0, -1.0);
+        glBegin(GL_TRIANGLES);
+        glColor3f(1.0 as f32, 0.0 as f32, 0.0 as f32);
+        glVertex2f(-0.6 as f32, -0.4 as f32);
+        glColor3f(0.0 as f32, 1.0 as f32, 0.0 as f32);
+        glVertex2f(0.6 as f32, -0.4 as f32);
+        glColor3f(0.0 as f32, 0.0 as f32, 1.0 as f32);
+        glVertex2f(0.0 as f32, 0.6 as f32);
+        glEnd();
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 0;
+}

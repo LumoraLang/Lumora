@@ -381,17 +381,16 @@ void IREmitter::emitGlobalLet(LetStmt &l) {
     case NodeKind::IntLit: {
       auto &v = static_cast<IntLit &>(*l.init);
       initVal = std::to_string(v.value);
-      ty = SemaType::i64Ty();
+      if (!l.ty) ty = SemaType::i64Ty();
       hasInit = true;
       break;
     }
     case NodeKind::FloatLit: {
       auto &v = static_cast<FloatLit &>(*l.init);
       auto s = std::format("{:.17g}", v.value);
-      if (s.find('.') == std::string::npos && s.find('e') == std::string::npos)
-        s += ".0";
+      if (s.find('.') == std::string::npos && s.find('e') == std::string::npos && s.find('E') == std::string::npos) s += ".0";
       initVal = std::move(s);
-      ty = SemaType::f64Ty();
+      if (!l.ty)ty = SemaType::f64Ty();
       hasInit = true;
       break;
     }
@@ -496,17 +495,55 @@ void IREmitter::emitStmt(Node &n) {
 void IREmitter::emitLetStmt(LetStmt &l) {
   TypeRef ty = SemaType::i64Ty();
   std::string llvmTy = "i64";
+  if (l.ty) {
+    ty = m_sema.resolveType(*l.ty);
+    llvmTy = llvmType(ty);
+  }
 
   if (l.init) {
     auto val = emitExpr(*l.init);
-    ty = val.type ? val.type : ty;
-    llvmTy = llvmType(ty);
+    if (!l.ty) {
+      ty = val.type ? val.type : ty;
+      llvmTy = llvmType(ty);
+    }
 
     auto ptrTy = SemaType::ptrTy(ty);
     auto allocReg = newReg();
     emitToCurrentBlock(std::format("{} = alloca {}", allocReg, llvmTy));
-    emitToCurrentBlock(
-        std::format("store {} {}, {}* {}", llvmTy, val.reg, llvmTy, allocReg));
+    if (llvmType(val.type) != llvmTy) {
+      auto tmpReg = newReg();
+      std::string srcS = llvmType(val.type);
+      bool srcInt = val.type && (val.type->isInt() || val.type->isBool());
+      bool dstInt = ty->isInt() || ty->isBool();
+      bool srcFlt = val.type && val.type->isFloat();
+      bool dstFlt = ty->isFloat();
+      bool srcPtr = val.type && val.type->isPtr();
+      bool dstPtr = ty->isPtr();
+      if (srcInt && dstInt) {
+        int srcBits = srcS == "i64" ? 64 : srcS == "i32" ? 32 : srcS == "i16" ? 16 : 8;
+        int dstBits = llvmTy == "i64" ? 64 : llvmTy == "i32" ? 32 : llvmTy == "i16" ? 16 : 8;
+        std::string op = srcBits > dstBits ? "trunc" : "sext";
+        emitToCurrentBlock(std::format("{} = {} {} {} to {}", tmpReg, op, srcS, val.reg, llvmTy));
+      } else if (srcFlt && dstFlt) {
+        int srcFBits = srcS == "double" ? 64 : srcS == "float" ? 32 : 16;
+        int dstFBits = llvmTy == "double" ? 64 : llvmTy == "float" ? 32 : 16;
+        std::string op = srcFBits > dstFBits ? "fptrunc" : "fpext";
+        emitToCurrentBlock(std::format("{} = {} {} {} to {}", tmpReg, op, srcS, val.reg, llvmTy));
+      } else if (srcFlt && dstInt) {
+        emitToCurrentBlock(std::format("{} = fptosi {} {} to {}", tmpReg, srcS, val.reg, llvmTy));
+      } else if (srcInt && dstFlt) {
+        emitToCurrentBlock(std::format("{} = sitofp {} {} to {}", tmpReg, srcS, val.reg, llvmTy));
+      } else if (srcPtr && dstPtr) {
+        emitToCurrentBlock(std::format("{} = bitcast {} {} to {}", tmpReg, srcS, val.reg, llvmTy));
+      } else {
+        emitToCurrentBlock(std::format("{} = bitcast {} {} to {}", tmpReg, srcS, val.reg, llvmTy));
+      }
+      emitToCurrentBlock(
+          std::format("store {} {}, {}* {}", llvmTy, tmpReg, llvmTy, allocReg));
+    } else {
+      emitToCurrentBlock(
+          std::format("store {} {}, {}* {}", llvmTy, val.reg, llvmTy, allocReg));
+    }
     m_locals[l.name] = {allocReg, ptrTy, true};
   } else {
     auto ptrTy = SemaType::ptrTy(ty);
@@ -910,18 +947,62 @@ IRValue IREmitter::emitCallExpr(CallExpr &e) {
   for (auto &a : e.args)
     argVals.push_back(emitExpr(*a));
 
+  auto calleeTy = m_sema.inferExpr(*e.callee);
+  TypeRef retTy = SemaType::voidTy();
+  std::vector<TypeRef> paramTys;
+  if (calleeTy && calleeTy->kind == TypeKind::Fn && calleeTy->ret) {
+    retTy = calleeTy->ret;
+    paramTys = calleeTy->params;
+  }
+
   std::string argStr;
   for (size_t i = 0; i < argVals.size(); ++i) {
     if (i)
       argStr += ", ";
-    argStr += llvmType(argVals[i].type) + " " + argVals[i].reg;
+
+    auto &val = argVals[i];
+    TypeRef wantTy;
+    if (i < paramTys.size()) wantTy = paramTys[i];
+    if (!wantTy || val.type->str() == wantTy->str()) {
+      argStr += llvmType(val.type) + " " + val.reg;
+      continue;
+    }
+
+    std::string srcTyS = llvmType(val.type);
+    std::string dstTyS = llvmType(wantTy);
+    auto reg = newReg();
+    bool srcIsInt  = val.type->isInt()  || val.type->isBool();
+    bool srcIsFlt  = val.type->isFloat();
+    bool dstIsInt  = wantTy->isInt()    || wantTy->isBool();
+    bool dstIsFlt  = wantTy->isFloat();
+    bool srcIsPtr  = val.type->isPtr();
+    bool dstIsPtr  = wantTy->isPtr();
+    if (srcIsInt && dstIsInt) {
+      int srcBits = srcTyS == "i64" ? 64 : srcTyS == "i32" ? 32 : srcTyS == "i16" ? 16 : 8;
+      int dstBits = dstTyS == "i64" ? 64 : dstTyS == "i32" ? 32 : dstTyS == "i16" ? 16 : 8;
+      std::string op = srcBits > dstBits ? "trunc" : "sext";
+      if (srcBits == dstBits) op = "bitcast";
+      emitToCurrentBlock(std::format("{} = {} {} {} to {}", reg, op, srcTyS, val.reg, dstTyS));
+    } else if (srcIsFlt && dstIsFlt) {
+      int srcFBits = srcTyS == "double" ? 64 : srcTyS == "float" ? 32 : 16;
+      int dstFBits = dstTyS == "double" ? 64 : dstTyS == "float" ? 32 : 16;
+      std::string op = srcFBits > dstFBits ? "fptrunc" : "fpext";
+      emitToCurrentBlock(std::format("{} = {} {} {} to {}", reg, op, srcTyS, val.reg, dstTyS));
+    } else if (srcIsInt && dstIsFlt) {
+      emitToCurrentBlock(std::format("{} = sitofp {} {} to {}", reg, srcTyS, val.reg, dstTyS));
+    } else if (srcIsFlt && dstIsInt) {
+      emitToCurrentBlock(std::format("{} = fptosi {} {} to {}", reg, srcTyS, val.reg, dstTyS));
+    } else if (srcIsPtr && dstIsPtr) {
+      emitToCurrentBlock(std::format("{} = bitcast {} {} to {}", reg, srcTyS, val.reg, dstTyS));
+    } else if (srcIsInt && dstIsPtr) {
+      emitToCurrentBlock(std::format("{} = inttoptr {} {} to {}", reg, srcTyS, val.reg, dstTyS));
+    } else {
+      emitToCurrentBlock(std::format("{} = bitcast {} {} to {}", reg, srcTyS, val.reg, dstTyS));
+    }
+
+    argStr += dstTyS + " " + reg;
   }
 
-  auto calleeTy = m_sema.inferExpr(*e.callee);
-  TypeRef retTy = SemaType::voidTy();
-  if (calleeTy && calleeTy->kind == TypeKind::Fn && calleeTy->ret) {
-    retTy = calleeTy->ret;
-  }
   std::string retStr = llvmType(retTy);
 
   if (retTy->kind == TypeKind::Void) {
@@ -964,8 +1045,10 @@ IRValue IREmitter::emitCastExpr(CastExpr &e) {
     emitToCurrentBlock(
         std::format("{} = sitofp {} {} to {}", reg, srcStr, val.reg, dstStr));
   } else if (srcTy->isFloat() && dstTy->isFloat()) {
-    emitToCurrentBlock(
-        std::format("{} = fpcast {} {} to {}", reg, srcStr, val.reg, dstStr));
+    int srcFBits = srcStr == "double" ? 64 : srcStr == "float" ? 32 : 16;
+    int dstFBits = dstStr == "double" ? 64 : dstStr == "float" ? 32 : 16;
+    std::string fcast = srcFBits > dstFBits ? "fptrunc" : "fpext";
+    emitToCurrentBlock(std::format("{} = {} {} {} to {}", reg, fcast, srcStr, val.reg, dstStr));
   } else if (srcTy->isPtr() && dstTy->isPtr()) {
     emitToCurrentBlock(std::format("{} = bitcast {} {} to {}", reg,
                                    llvmType(srcTy), val.reg,
