@@ -37,6 +37,7 @@ static const std::unordered_map<std::string_view, TokenKind> kKeywords = {
     {"true", TokenKind::KwTrue},
     {"false", TokenKind::KwFalse},
     {"null", TokenKind::KwNull},
+    {"nil", TokenKind::KwNull},
     {"as", TokenKind::KwAs},
     {"is", TokenKind::KwIs},
     {"match", TokenKind::KwMatch},

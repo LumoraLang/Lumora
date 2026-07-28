@@ -1,6 +1,6 @@
 @include "gtk3.lmi"
 fn set_title_with_filename(window: *void, filename: *void) {
-    if filename != 0 as *void {
+    if filename != nil { //neo: `nil` and `null` both are the same as `nil`
         let sep = " — ";
         let base = "Lumora Text Editor" + sep + (filename as &u8);
         gtk_window_set_title(window, base as &u8);
@@ -12,7 +12,7 @@ fn set_title_with_filename(window: *void, filename: *void) {
 
 fn on_window_destroy(obj: *void, data: *void) {
     let filename = g_object_get_data(obj, "filename");
-    if filename != 0 as *void { g_free(filename); }
+    if filename != nil { g_free(filename); }
     gtk_main_quit();
 }
 
@@ -21,9 +21,9 @@ fn on_new_activated(obj: *void, data: *void) {
     let buffer = g_object_get_data(window, "text-buffer");
     gtk_text_buffer_set_text(buffer, "", -1 as i32);
     let old = g_object_get_data(window, "filename");
-    if old != 0 as *void { g_free(old); }
-    g_object_set_data(window, "filename", 0 as *void);
-    set_title_with_filename(window, 0 as *void);
+    if old != nil { g_free(old); }
+    g_object_set_data(window, "filename", nil);
+    set_title_with_filename(window, nil);
 }
 
 fn do_open_dialog(window: *void) -> *void {
@@ -36,7 +36,7 @@ fn do_open_dialog(window: *void) -> *void {
     gtk_dialog_add_button(dialog, "_Open", -3 as i32);
     gtk_widget_show_all(dialog);
     let response = gtk_dialog_run(dialog);
-    let filename: *void = 0 as *void;
+    let filename: *void = nil;
     if response == -3 as i32 {
         filename = gtk_file_chooser_get_filename(chooser);
     }
@@ -54,7 +54,7 @@ fn do_save_dialog(window: *void) -> *void {
     gtk_dialog_add_button(dialog, "_Save", -3 as i32);
     gtk_widget_show_all(dialog);
     let response = gtk_dialog_run(dialog);
-    let filename: *void = 0 as *void;
+    let filename: *void = nil;
     if response == -3 as i32 {
         filename = gtk_file_chooser_get_filename(chooser);
     }
@@ -64,12 +64,12 @@ fn do_save_dialog(window: *void) -> *void {
 
 fn read_file_into_buffer(filename: *void, buffer: *void) -> bool {
     let f = fopen(filename as &u8, "rb");
-    if f == 0 as *void { return false; }
+    if f == nil { return false; }
     fseek(f, 0 as i64, 2 as i32);
     let size = ftell(f);
     fseek(f, 0 as i64, 0 as i32);
     let buf = malloc(size + 1 as u64);
-    if buf == 0 as *void {
+    if buf == nil {
         fclose(f);
         return false;
     }
@@ -88,10 +88,10 @@ fn save_buffer_to_file(filename: *void, buffer: *void) -> bool {
     let text = gtk_text_buffer_get_text(buffer, start_iter, end_iter, 0 as i32);
     free(start_iter);
     free(end_iter);
-    if text == 0 as *void { return false; }
+    if text == nil { return false; }
     let len = strlen(text as &u8);
     let f = fopen(filename as &u8, "wb");
-    if f == 0 as *void {
+    if f == nil {
         g_free(text);
         return false;
     }
@@ -105,11 +105,11 @@ fn on_open_activated(obj: *void, data: *void) {
     let window = data;
     let buffer = g_object_get_data(window, "text-buffer");
     let filename = do_open_dialog(window);
-    if filename != 0 as *void {
+    if filename != nil {
         let ok = read_file_into_buffer(filename, buffer);
         if ok {
             let old = g_object_get_data(window, "filename");
-            if old != 0 as *void { g_free(old); }
+            if old != nil { g_free(old); }
             g_object_set_data(window, "filename", filename);
             set_title_with_filename(window, filename);
         } else {
@@ -123,9 +123,9 @@ fn on_save_activated(obj: *void, data: *void) {
     let window = data;
     let buffer = g_object_get_data(window, "text-buffer");
     let mut filename = g_object_get_data(window, "filename");
-    if filename == 0 as *void {
+    if filename == nil {
         filename = do_save_dialog(window);
-        if filename == 0 as *void { return; }
+        if filename == nil { return; }
         g_object_set_data(window, "filename", filename);
         set_title_with_filename(window, filename);
     }
@@ -141,11 +141,11 @@ fn on_save_as_activated(obj: *void, data: *void) {
     let window = data;
     let buffer = g_object_get_data(window, "text-buffer");
     let filename = do_save_dialog(window);
-    if filename != 0 as *void {
+    if filename != nil {
         let ok = save_buffer_to_file(filename, buffer);
         if ok {
             let old = g_object_get_data(window, "filename");
-            if old != 0 as *void { g_free(old); }
+            if old != nil { g_free(old); }
             g_object_set_data(window, "filename", filename);
             set_title_with_filename(window, filename);
         } else {
@@ -161,7 +161,7 @@ pub fn main() -> i64 {
     let window = gtk_window_new(0 as i32);
     gtk_window_set_default_size(window, 800, 600);
     gtk_window_set_position(window, 1 as i32);
-    g_signal_connect_data(window, "destroy", on_window_destroy as *void, 0 as *void, 0 as *void, 0 as i32);
+    g_signal_connect_data(window, "destroy", on_window_destroy as *void, nil, nil, 0 as i32);
     let vbox = gtk_box_new(1 as i32, 0 as i32);
     gtk_container_add(window, vbox);
     let menubar = gtk_menu_bar_new();
@@ -171,23 +171,23 @@ pub fn main() -> i64 {
     gtk_menu_item_set_submenu(file_item, file_menu);
     gtk_menu_shell_append(menubar, file_item);
     let new_item = gtk_menu_item_new_with_label("New");
-    g_signal_connect_data(new_item, "activate", on_new_activated as *void, window, 0 as *void, 0 as i32);
+    g_signal_connect_data(new_item, "activate", on_new_activated as *void, window, nil, 0 as i32);
     gtk_menu_shell_append(file_menu, new_item);
     let open_item = gtk_menu_item_new_with_label("Open");
-    g_signal_connect_data(open_item, "activate", on_open_activated as *void, window, 0 as *void, 0 as i32);
+    g_signal_connect_data(open_item, "activate", on_open_activated as *void, window, nil, 0 as i32);
     gtk_menu_shell_append(file_menu, open_item);
     let save_item = gtk_menu_item_new_with_label("Save");
-    g_signal_connect_data(save_item, "activate", on_save_activated as *void, window, 0 as *void, 0 as i32);
+    g_signal_connect_data(save_item, "activate", on_save_activated as *void, window, nil, 0 as i32);
     gtk_menu_shell_append(file_menu, save_item);
     let save_as_item = gtk_menu_item_new_with_label("Save As...");
-    g_signal_connect_data(save_as_item, "activate", on_save_as_activated as *void, window, 0 as *void, 0 as i32);
+    g_signal_connect_data(save_as_item, "activate", on_save_as_activated as *void, window, nil, 0 as i32);
     gtk_menu_shell_append(file_menu, save_as_item);
     let sep = gtk_separator_menu_item_new();
     gtk_menu_shell_append(file_menu, sep);
     let quit_item = gtk_menu_item_new_with_label("Quit");
-    g_signal_connect_data(quit_item, "activate", gtk_main_quit as *void, 0 as *void, 0 as *void, 0 as i32);
+    g_signal_connect_data(quit_item, "activate", gtk_main_quit as *void, nil, nil, 0 as i32);
     gtk_menu_shell_append(file_menu, quit_item);
-    let scrolled = gtk_scrolled_window_new(0 as *void, 0 as *void);
+    let scrolled = gtk_scrolled_window_new(nil, nil);
     gtk_scrolled_window_set_policy(scrolled, 1 as i32, 1 as i32);
     gtk_box_pack_start(vbox, scrolled, 1 as i32, 1 as i32, 0 as u32);
     let text_view = gtk_text_view_new();
