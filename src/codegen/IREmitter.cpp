@@ -1107,6 +1107,48 @@ IRValue IREmitter::emitAssignExpr(AssignExpr &e) {
     }
   }
 
+  if (e.lhs->kind == NodeKind::IndexExpr) {
+    auto &idx = static_cast<IndexExpr &>(*e.lhs);
+    auto obj = emitExpr(*idx.obj);
+    auto ix  = emitExpr(*idx.idx);
+    auto elemTy = obj.type && obj.type->inner ? obj.type->inner : SemaType::i64Ty();
+    auto addr = newReg();
+    emitToCurrentBlock(std::format("{} = getelementptr {}, {}* {}, i64 {}", addr, llvmType(elemTy), llvmType(elemTy), obj.reg, ix.reg));
+    auto storeTy = elemTy;
+    auto storeTyStr = llvmType(storeTy);
+    auto valReg = rhs.reg;
+    std::string rhsStr = rhs.type ? llvmType(rhs.type) : "i64";
+    bool rhsInt = rhs.type && (rhs.type->isInt() || rhs.type->isBool());
+    bool dstInt = storeTy->isInt() || storeTy->isBool();
+    bool rhsFlt = rhs.type && rhs.type->isFloat();
+    bool dstFlt = storeTy->isFloat();
+    bool rhsPtr = rhs.type && rhs.type->isPtr();
+    bool dstPtr = storeTy->isPtr();
+    if (rhsStr != storeTyStr) {
+      auto coerced = newReg();
+      if (rhsInt && dstInt) {
+        int srcBits = rhsStr == "i64" ? 64 : rhsStr == "i32" ? 32 : rhsStr == "i16" ? 16 : 8;
+        int dstBits = storeTyStr == "i64" ? 64 : storeTyStr == "i32" ? 32 : storeTyStr == "i16" ? 16 : 8;
+        std::string op = srcBits > dstBits ? "trunc" : "sext";
+        emitToCurrentBlock(std::format("{} = {} {} {} to {}", coerced, op, rhsStr, rhs.reg, storeTyStr));
+      } else if (rhsFlt && dstFlt) {
+        int srcFBits = rhsStr == "double" ? 64 : rhsStr == "float" ? 32 : 16;
+        int dstFBits = storeTyStr == "double" ? 64 : storeTyStr == "float" ? 32 : 16;
+        std::string op = srcFBits > dstFBits ? "fptrunc" : "fpext";
+        emitToCurrentBlock(std::format("{} = {} {} {} to {}", coerced, op, rhsStr, rhs.reg, storeTyStr));
+      } else if (rhsFlt && dstInt) {
+        emitToCurrentBlock(std::format("{} = fptosi {} {} to {}", coerced, rhsStr, rhs.reg, storeTyStr));
+      } else if (rhsInt && dstFlt) {
+        emitToCurrentBlock(std::format("{} = sitofp {} {} to {}", coerced, rhsStr, rhs.reg, storeTyStr));
+      } else {
+        emitToCurrentBlock(std::format("{} = bitcast {} {} to {}", coerced, rhsStr, rhs.reg, storeTyStr));
+      }
+      valReg = coerced;
+    }
+    emitToCurrentBlock(std::format("store {} {}, {}* {}", storeTyStr, valReg, storeTyStr, addr));
+    return rhs;
+  }
+
   auto lhsPtr = emitExpr(*e.lhs);
   auto ty = rhs.type ? rhs.type : SemaType::i64Ty();
   auto tyStr = llvmType(ty);
