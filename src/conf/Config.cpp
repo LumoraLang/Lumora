@@ -95,6 +95,8 @@ struct ConfigParser {
       cfg.optSteps.push_back({});
     } else if (currentSection == "link") {
       cfg.linkSteps.push_back({});
+    } else if (currentSection == "command") {
+      cfg.commandSteps.push_back({});
     }
   }
 
@@ -108,6 +110,8 @@ struct ConfigParser {
         cfg.version = val;
       else if (key == "output_dir")
         cfg.outputDir = val;
+      else if (key == "multiboot")
+        cfg.multiboot = (val == "true" || val == "1");
       else
         cfg.vars[std::string(key)] = val;
       return;
@@ -150,6 +154,8 @@ struct ConfigParser {
         opt.input = val;
       else if (key == "output")
         opt.output = val;
+      else if (key == "program")
+        opt.program = val;
       else if (key == "level")
         opt.level = val;
       else if (key == "passes" && rawVal.find('[') != std::string_view::npos)
@@ -167,12 +173,23 @@ struct ConfigParser {
         lnk.output = val;
       else if (key == "linker")
         lnk.linker = val;
+      else if (key == "script")
+        lnk.script = val;
       else if (key == "inputs" && rawVal.find('[') != std::string_view::npos)
         lnk.inputs = parseArray(rawVal);
       else if (key == "libs" && rawVal.find('[') != std::string_view::npos)
         lnk.libs = parseArray(rawVal);
       else if (key == "flags" && rawVal.find('[') != std::string_view::npos)
         lnk.flags = parseArray(rawVal);
+      return;
+    }
+
+    if (currentSection == "command") {
+      if (cfg.commandSteps.empty())
+        return;
+      auto &cmd = cfg.commandSteps.back();
+      if (key == "cmd")
+        cmd.cmd = val;
       return;
     }
   }

@@ -51,6 +51,7 @@ static const std::unordered_map<std::string_view, TokenKind> kKeywords = {
     {"alignof", TokenKind::KwAlignof},
     {"typeof", TokenKind::KwTypeof},
     {"offsetof", TokenKind::KwOffsetof},
+    {"asm", TokenKind::KwAsm},
 };
 }
 

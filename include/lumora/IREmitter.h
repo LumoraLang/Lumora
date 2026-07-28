@@ -75,6 +75,7 @@ private:
     uint32_t                             m_strCounter   = 0;
 
     std::string                          m_currentFn;
+    std::string                          m_currentRetTy;
     std::vector<IRBlock>                 m_blocks;
     size_t                               m_currentBlock = 0;
 
@@ -117,6 +118,7 @@ private:
     IRValue     emitStructExpr(ast::StructExpr& e);
 
     IRValue     emitExtensionNode(ast::ExtensionNode& n);
+    IRValue     emitAsmExpr(ast::AsmExpr& n);
 
     IRValue     load(const IRValue& ptr);
     void        store(const IRValue& val, const IRValue& ptr);

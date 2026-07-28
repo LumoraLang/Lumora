@@ -32,6 +32,8 @@ enum class NodeKind : uint32_t {
     IntLit, FloatLit, StringLit, CharLit, BoolLit, NullLit,
     IdentExpr, PathExpr,
 
+    AsmExpr,
+
     PrimType, PtrType, RefType, SliceType, ArrayType,
     FnType, NamedType, TupleType,
 
@@ -323,6 +325,19 @@ struct IdentExpr : TypedNode<NodeKind::IdentExpr> { std::string name; };
 struct PathExpr : TypedNode<NodeKind::PathExpr> {
     std::vector<std::string> segments;
     std::vector<TypePtr>     typeArgs;
+};
+
+struct AsmOperand {
+    std::string constraint;
+    NodePtr     expr;
+};
+
+struct AsmExpr : TypedNode<NodeKind::AsmExpr> {
+    std::string              template_;
+    std::vector<AsmOperand>  outputs;
+    std::vector<AsmOperand>  inputs;
+    std::vector<std::string> clobbers;
+    bool                     isBlock = false;
 };
 
 struct ExtensionNode : TypedNode<NodeKind::ExtensionNode> {

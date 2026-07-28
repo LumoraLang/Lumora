@@ -11,6 +11,7 @@ struct LinkStep {
     std::vector<std::string> inputs;
     std::string              output;
     std::string              linker = "clang";
+    std::string              script;
     std::vector<std::string> flags;
     std::vector<std::string> libs;
 };
@@ -18,9 +19,14 @@ struct LinkStep {
 struct OptStep {
     std::string              input;
     std::string              output;
+    std::string              program = "opt";
     std::string              level = "O2";
     std::vector<std::string> passes;
     std::vector<std::string> extraFlags;
+};
+
+struct CommandStep {
+    std::string cmd;
 };
 
 struct SourceGroup {
@@ -33,9 +39,11 @@ struct LumoraConfig {
     std::string              name;
     std::string              version;
     std::string              outputDir = "build";
+    bool                     multiboot = false;
     std::vector<SourceGroup> groups;
     std::vector<OptStep>     optSteps;
     std::vector<LinkStep>    linkSteps;
+    std::vector<CommandStep> commandSteps;
     std::vector<std::string> extensionDirs;
     std::vector<std::string> includeDirs;
     std::vector<std::string> defines;

@@ -1,0 +1,112 @@
+extern "C" {
+    fn memcpy(dest: *u8, src: *u8, n: i64);
+}
+
+const VGA_BUFFER: i64 = 0xB8000;
+const VGA_WIDTH: i64 = 80;
+const VGA_HEIGHT: i64 = 25;
+const SERIAL_PORT: i64 = 0x3F8;
+fn init64() -> void {
+    asm {
+        ".byte 0x66; xor %ax, %ax"
+        "mov %ax, %ss"
+        "mov %ax, %ds"
+        "mov %ax, %es"
+        "mov %ax, %fs"
+        "mov %ax, %gs"
+    }
+    main();
+    while true {}
+}
+
+fn port_outb(port: i64, value: i64) -> void {
+    asm("outb $0, $1" : : "{ax}"(value), "{dx}"(port));
+}
+
+fn port_inb(port: i64) -> i64 {
+    let mut result: i64 = 0;
+    asm("inb $1, $0" : "={ax}"(result) : "{dx}"(port));
+    return result & 0xFF;
+}
+
+fn serial_init() -> void {
+    let base: i64 = SERIAL_PORT;
+    port_outb(base + 1, 0x00);
+    port_outb(base + 3, 0x80);
+    port_outb(base, 0x03);
+    port_outb(base + 1, 0x00);
+    port_outb(base + 3, 0x03);
+    port_outb(base + 2, 0xC7);
+    port_outb(base + 4, 0x0B);
+}
+
+fn serial_putc(ch: u8) -> void {
+    let base: i64 = SERIAL_PORT;
+    let mut ready: i64 = 0;
+    while ready == 0 {
+        let status = port_inb(base + 5);
+        ready = status & 0x20;
+    }
+    port_outb(base, ch as i64);
+}
+
+fn serial_print(msg: *u8) -> void {
+    let mut i: i64 = 0;
+    let mut done: bool = false;
+    while !done {
+        let ch: u8 = *(((msg as i64) + i) as *u8);
+        if ch == 0 {
+            done = true;
+        } else {
+            serial_putc(ch);
+            i = i + 1;
+        }
+    }
+}
+
+fn vga_putchar(offset: i64, ch: u8, attr: u8) -> void {
+    let base = VGA_BUFFER + offset * 2;
+    memcpy(base as *u8, &ch, 1);
+    memcpy((base + 1) as *u8, &attr, 1);
+}
+
+fn vga_print(msg: *u8, col: i64, row: i64, attr: u8) -> void {
+    let mut i: i64 = 0;
+    let mut c: i64 = col;
+    let mut done: bool = false;
+    while !done {
+        let ch: u8 = *(((msg as i64) + i) as *u8);
+        if ch == 0 {
+            done = true;
+        } else {
+            let offset = row * VGA_WIDTH + c;
+            vga_putchar(offset, ch, attr);
+            c = c + 1;
+            i = i + 1;
+        }
+    }
+}
+
+fn vga_clear(attr: u8) -> void {
+    let space: u8 = 32;
+    let mut row: i64 = 0;
+    while row < VGA_HEIGHT {
+        let mut col: i64 = 0;
+        while col < VGA_WIDTH {
+            let offset = row * VGA_WIDTH + col;
+            vga_putchar(offset, space, attr);
+            col = col + 1;
+        }
+        row = row + 1;
+    }
+}
+
+pub fn main() -> i32 {
+    vga_clear(0x0F as u8);
+    vga_print("Hello World from VGA!", 0, 0, 0x0F as u8);
+    vga_print("IT WORKS", 0, 1, 0x0A as u8);
+    serial_init();
+    serial_print("Hello World from Serial!\n");
+    serial_print("IT WORKS\n");
+    return 0;
+}

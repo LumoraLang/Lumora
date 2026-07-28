@@ -67,6 +67,7 @@ private:
     ast::NodePtr                     parseForStmt();
     ast::NodePtr                     parseMatchExpr();
     ast::NodePtr                     parseDeferStmt();
+    ast::NodePtr                     parseAsmExpr();
 
     ast::NodePtr                     parsePrimaryExpr();
     ast::NodePtr                     parseUnaryExpr();

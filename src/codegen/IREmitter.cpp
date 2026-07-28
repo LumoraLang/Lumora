@@ -29,7 +29,19 @@ void IREmitter::beginBlock(std::string label) {
 void IREmitter::emitToCurrentBlock(std::string instr) {
   if (m_blocks.empty())
     beginBlock("entry");
-  m_blocks[m_currentBlock].instrs.push_back(std::move(instr));
+  if (instr.find("alloca") != std::string::npos && m_currentBlock != 0) {
+    auto &entry = m_blocks[0];
+    auto it = entry.instrs.end();
+    for (auto rit = entry.instrs.rbegin(); rit != entry.instrs.rend(); ++rit) {
+      if (rit->substr(0, 2) == "br" || rit->substr(0, 3) == "ret") {
+        it = std::next(rit).base();
+        break;
+      }
+    }
+    entry.instrs.insert(it, std::move(instr));
+  } else {
+    m_blocks[m_currentBlock].instrs.push_back(std::move(instr));
+  }
 }
 
 std::string IREmitter::currentLabel() const {
@@ -308,6 +320,7 @@ void IREmitter::emitFnDecl(FnDecl &fn) {
   m_locals.clear();
   m_deferStack.clear();
   m_currentFn = fn.name;
+  m_currentRetTy = fn.retTy ? llvmTypeAST(fn.retTy.get()) : "void";
 
   beginBlock("entry");
 
@@ -472,6 +485,9 @@ void IREmitter::emitStmt(Node &n) {
   case NodeKind::ExtensionNode:
     emitExtensionNode(static_cast<ExtensionNode &>(n));
     break;
+  case NodeKind::AsmExpr:
+    emitAsmExpr(static_cast<AsmExpr &>(n));
+    break;
   default:
     break;
   }
@@ -504,7 +520,15 @@ void IREmitter::emitReturnStmt(ReturnStmt &r) {
   emitDeferred();
   if (r.value) {
     auto val = emitExpr(*r.value);
-    emitToCurrentBlock(std::format("ret {} {}", llvmType(val.type), val.reg));
+    auto retTy = m_currentRetTy.empty() ? llvmType(val.type) : m_currentRetTy;
+    if (retTy != llvmType(val.type)) {
+      auto truncReg = newReg();
+      emitToCurrentBlock(
+          std::format("{} = trunc {} {} to {}", truncReg, llvmType(val.type),
+                      val.reg, retTy));
+      val = {truncReg, val.type, false};
+    }
+    emitToCurrentBlock(std::format("ret {} {}", retTy, val.reg));
   } else {
     emitToCurrentBlock("ret void");
   }
@@ -687,6 +711,8 @@ IRValue IREmitter::emitExpr(Node &n) {
   }
   case NodeKind::ExtensionNode:
     return emitExtensionNode(static_cast<ExtensionNode &>(n));
+  case NodeKind::AsmExpr:
+    return emitAsmExpr(static_cast<AsmExpr &>(n));
   default:
     return {newReg(), SemaType::voidTy(), false};
   }
@@ -1094,6 +1120,111 @@ IRValue IREmitter::emitExtensionNode(ExtensionNode &n) {
     if (c)
       emitExpr(*c);
   return {newReg(), SemaType::voidTy(), false};
+}
+
+IRValue IREmitter::emitAsmExpr(AsmExpr &n) {
+  std::string templateStr;
+  for (char c : n.template_) {
+    if (c == '\n')
+      templateStr += "\\0A";
+    else if (c == '"')
+      templateStr += "\\22";
+    else if (c == '\\')
+      templateStr += "\\5C";
+    else
+      templateStr += c;
+  }
+
+  if (n.isBlock) {
+    emitToCurrentBlock(std::format(
+        "call void asm sideeffect \"{}\", \"\"()",
+        templateStr));
+    return {newReg(), SemaType::voidTy(), false};
+  }
+
+  std::string constraints;
+  std::vector<std::pair<std::string, std::string>> inputArgs;
+
+  auto inferType = [](const std::string &c) -> std::string {
+    std::string base = c;
+    if (!base.empty() && base[0] == '=')
+      base = base.substr(1);
+    if (base == "a" || base.find("ax") != std::string::npos ||
+        base.find("al") != std::string::npos)
+      return "i8";
+    if (base == "d" || base.find("dx") != std::string::npos ||
+        base.find("dl") != std::string::npos)
+      return "i16";
+    if (base.find("cx") != std::string::npos ||
+        base.find("cl") != std::string::npos)
+      return "i8";
+    return "i64";
+  };
+
+  std::string outType = "i64";
+  for (auto &out : n.outputs) {
+    if (!constraints.empty())
+      constraints += ",";
+    constraints += out.constraint;
+    outType = inferType(out.constraint);
+  }
+
+  for (auto &inp : n.inputs) {
+    if (!constraints.empty())
+      constraints += ",";
+    constraints += inp.constraint;
+    auto val = emitExpr(*inp.expr);
+    std::string ty = inferType(inp.constraint);
+    if (ty != llvmType(val.type)) {
+      auto truncReg = newReg();
+      emitToCurrentBlock(
+          std::format("{} = trunc {} {} to {}", truncReg, llvmType(val.type),
+                      val.reg, ty));
+      inputArgs.push_back({ty, truncReg});
+    } else {
+      inputArgs.push_back({llvmType(val.type), val.reg});
+    }
+  }
+
+  for (auto &clob : n.clobbers) {
+    constraints += ",~{" + clob + "}";
+  }
+
+  std::string argStr;
+  for (size_t i = 0; i < inputArgs.size(); ++i) {
+    if (i)
+      argStr += ", ";
+    argStr += inputArgs[i].first + " " + inputArgs[i].second;
+  }
+
+  bool hasOutputs = !n.outputs.empty();
+  auto reg = newReg();
+  if (hasOutputs) {
+    emitToCurrentBlock(std::format(
+        "{} = call {} asm sideeffect \"{}\", \"{}\"({})",
+        reg, outType, templateStr, constraints, argStr));
+    if (outType != "i64") {
+      auto zextReg = newReg();
+      emitToCurrentBlock(
+          std::format("{} = zext {} {} to i64", zextReg, outType, reg));
+      reg = zextReg;
+    }
+    for (auto &out : n.outputs) {
+      auto ident = dynamic_cast<IdentExpr *>(out.expr.get());
+      if (ident) {
+        auto it = m_locals.find(ident->name);
+        if (it != m_locals.end()) {
+          store({reg, SemaType::i64Ty(), false}, it->second);
+        }
+      }
+    }
+    return {reg, SemaType::i64Ty(), false};
+  } else {
+    emitToCurrentBlock(std::format(
+        "call void asm sideeffect \"{}\", \"{}\"({})",
+        templateStr, constraints, argStr));
+    return {reg, SemaType::voidTy(), false};
+  }
 }
 
 } // namespace lumora

@@ -42,6 +42,12 @@ static void dumpChildren(const Node& n, int depth, std::ostream& out) {
             for (auto& a : e.args) dumpNode(*a, depth, out);
             break;
         }
+        case NodeKind::AsmExpr: {
+            auto& e = static_cast<const AsmExpr&>(n);
+            for (auto& o : e.outputs) if (o.expr) dumpNode(*o.expr, depth, out);
+            for (auto& i : e.inputs)  if (i.expr) dumpNode(*i.expr, depth, out);
+            break;
+        }
         default: break;
     }
 }
@@ -69,6 +75,7 @@ static void dumpNode(const Node& n, int depth, std::ostream& out) {
         case NodeKind::BoolLit:      out << "Bool:" << (static_cast<const BoolLit&>(n).value ? "true" : "false") << "\n"; break;
         case NodeKind::NullLit:      out << "Null\n"; break;
         case NodeKind::ExtensionNode: out << "Ext:" << static_cast<const ExtensionNode&>(n).extensionId << "\n"; break;
+        case NodeKind::AsmExpr:       out << "Asm:" << (static_cast<const AsmExpr&>(n).isBlock ? "block" : "extended") << "\n"; break;
         default:                     out << "Node(" << static_cast<int>(n.kind) << ")\n"; break;
     }
     dumpChildren(n, depth + 1, out);

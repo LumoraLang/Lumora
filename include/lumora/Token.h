@@ -29,6 +29,7 @@ enum class TokenKind : uint32_t {
     KwMatch, KwDefer, KwUnsafe, KwInline,
     KwVolatile, KwAsync, KwAwait, KwYield,
     KwSizeof, KwAlignof, KwTypeof, KwOffsetof,
+    KwAsm,
     Ident,
     LitInt, LitFloat, LitString, LitChar, LitBool,
     ExtensionToken,
@@ -49,7 +50,7 @@ struct Token {
     using ExtraData = std::variant<std::monostate, int64_t, double, std::string, uint32_t>;
     ExtraData extra{};
     [[nodiscard]] bool is(TokenKind k)  const noexcept { return kind == k; }
-    [[nodiscard]] bool isKeyword()      const noexcept { return kind >= TokenKind::KwFn && kind <= TokenKind::KwOffsetof; }
+    [[nodiscard]] bool isKeyword()      const noexcept { return kind >= TokenKind::KwFn && kind <= TokenKind::KwAsm; }
     [[nodiscard]] bool isLiteral()      const noexcept { return kind >= TokenKind::LitInt && kind <= TokenKind::LitBool; }
     [[nodiscard]] bool isIdent()        const noexcept { return kind == TokenKind::Ident; }
     [[nodiscard]] bool isEof()          const noexcept { return kind == TokenKind::Eof; }

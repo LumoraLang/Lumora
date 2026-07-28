@@ -16,6 +16,7 @@ static void printUsage(std::string_view argv0) {
                "  --dump-ast        Print AST and exit\n"
                "  --dump-ir         Print generated LLVM IR\n"
                "  --stop-ir         Stop after IR emission (no opt/link)\n"
+               "  --multiboot       Generate multiboot boot stub (.boot.S)\n"
                "  --no-opt          Skip opt step\n"
                "  --verbose         Verbose build output\n"
                "  --ext-dir <dir>   Load extensions from directory\n"
@@ -40,6 +41,8 @@ int main(int argc, char **argv) {
       opts.dumpIR = true;
     } else if (a == "--stop-ir") {
       opts.stopAfterIR = true;
+    } else if (a == "--multiboot") {
+      opts.multiboot = true;
     } else if (a == "--no-opt") {
       opts.noOpt = true;
     } else if (a == "--verbose" || a == "-v") {
@@ -63,6 +66,7 @@ int main(int argc, char **argv) {
   }
 
   lumora::LumoraConfig cfg;
+  std::filesystem::path confDir;
   if (std::filesystem::exists(confPath)) {
     try {
       cfg = lumora::LumoraConfig::loadFromFile(confPath);
@@ -70,12 +74,38 @@ int main(int argc, char **argv) {
       std::cerr << "error loading config: " << e.what() << "\n";
       return 1;
     }
+    confDir = std::filesystem::absolute(confPath).parent_path();
   }
 
   for (auto &d : extDirs)
     cfg.extensionDirs.push_back(d);
   if (!outputDir.empty())
     cfg.outputDir = outputDir;
+
+  if (cfg.multiboot) opts.multiboot = true;
+  if (!confDir.empty()) {
+    cfg.outputDir = (confDir / cfg.outputDir).string();
+    for (auto &grp : cfg.groups)
+      for (auto &f : grp.files)
+        f = (confDir / f).string();
+    for (auto &opt : cfg.optSteps) {
+      if (!opt.input.empty() && !opt.input.starts_with('-'))
+        opt.input = (confDir / opt.input).string();
+      if (!opt.output.empty() && !opt.output.starts_with('-'))
+        opt.output = (confDir / opt.output).string();
+    }
+    for (auto &lnk : cfg.linkSteps) {
+      if (!lnk.script.empty() && !lnk.script.starts_with('-'))
+        lnk.script = (confDir / lnk.script).string();
+      for (auto &i : lnk.inputs)
+        if (!i.starts_with('-'))
+          i = (confDir / i).string();
+      if (!lnk.output.empty() && !lnk.output.starts_with('-'))
+        lnk.output = (confDir / lnk.output).string();
+    }
+    for (auto &cmd : cfg.commandSteps)
+      cmd.cmd = "cd " + confDir.string() + " && " + cmd.cmd;
+  }
 
   if (!files.empty()) {
     if (cfg.groups.empty())

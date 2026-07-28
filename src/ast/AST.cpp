@@ -122,6 +122,12 @@ static void walkChildren(Node& n, ASTVisitorFn& pre, ASTVisitorFn& post) {
             for (auto& c : e.children) walk(c, pre, post);
             break;
         }
+        case NodeKind::AsmExpr: {
+            auto& e = static_cast<AsmExpr&>(n);
+            for (auto& o : e.outputs) if (o.expr) walk(o.expr, pre, post);
+            for (auto& i : e.inputs)  if (i.expr) walk(i.expr, pre, post);
+            break;
+        }
         default:
             break;
     }

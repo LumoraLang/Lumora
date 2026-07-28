@@ -27,7 +27,7 @@ static constexpr std::array<std::string_view, static_cast<size_t>(TokenKind::_Co
     "true", "false", "null", "as", "is",
     "match", "defer", "unsafe", "inline",
     "volatile", "async", "await", "yield",
-    "sizeof", "alignof", "typeof", "offsetof",
+    "sizeof", "alignof", "typeof", "offsetof", "asm",
     "<ident>",
     "<int>", "<float>", "<string>", "<char>", "<bool>",
     "<ext>",

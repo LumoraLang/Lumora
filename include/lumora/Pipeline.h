@@ -27,6 +27,8 @@ struct PipelineOptions {
     bool stopAfterIR = false;
     bool noOpt       = false;
     bool verbose     = false;
+    bool multiboot   = false;
+    uint32_t bootBase = 0x100000;
     std::string targetTriple;
     std::string dataLayout;
 };
@@ -41,6 +43,7 @@ public:
 
     bool runOpt(const OptStep& step);
     bool runLink(const LinkStep& step);
+    bool runCommand(const CommandStep& step);
 
     void loadExtensions();
 

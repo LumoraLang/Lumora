@@ -3,3 +3,4 @@
 /test_*
 /.cache
 /stdlib
+*.elf

@@ -349,6 +349,13 @@ NodePtr Parser::parseStmt() {
         case TokenKind::KwFor:      return parseForStmt();
         case TokenKind::KwMatch:    return parseMatchExpr();
         case TokenKind::KwDefer:    return parseDeferStmt();
+        case TokenKind::KwAsm: {
+            auto e  = std::make_unique<ExprStmt>();
+            e->loc  = peek().loc;
+            e->expr = parseAsmExpr();
+            match(TokenKind::Semicolon);
+            return e;
+        }
         case TokenKind::KwBreak: {
             auto s = std::make_unique<BreakStmt>(); s->loc = eat().loc;
             if (check(TokenKind::Ident)) s->label = eat().raw;
@@ -433,6 +440,63 @@ NodePtr Parser::parseDeferStmt() {
     d->expr = parseExpr();
     match(TokenKind::Semicolon);
     return d;
+}
+
+NodePtr Parser::parseAsmExpr() {
+    auto a = std::make_unique<AsmExpr>();
+    a->loc = eat().loc;
+    if (check(TokenKind::LBrace)) {
+        eat();
+        a->isBlock = true;
+        while (!check(TokenKind::RBrace) && !check(TokenKind::Eof)) {
+            if (check(TokenKind::LitString)) {
+                auto s = std::get<std::string>(eat().extra);
+                if (!a->template_.empty()) a->template_ += "\n";
+                a->template_ += s;
+            } else {
+                error("expected string literal in asm block", peek().loc);
+                eat();
+            }
+        }
+        expect(TokenKind::RBrace);
+        return a;
+    }
+
+    expect(TokenKind::LParen);
+    a->template_ = std::get<std::string>(expect(TokenKind::LitString).extra);
+    if (match(TokenKind::Colon)) {
+        while (!check(TokenKind::Colon) && !check(TokenKind::RParen) && !check(TokenKind::Eof)) {
+            AsmOperand op;
+            op.constraint = std::get<std::string>(expect(TokenKind::LitString).extra);
+            expect(TokenKind::LParen);
+            op.expr = parseExpr();
+            expect(TokenKind::RParen);
+            a->outputs.push_back(std::move(op));
+            match(TokenKind::Comma);
+        }
+    }
+
+    if (match(TokenKind::Colon)) {
+        while (!check(TokenKind::Colon) && !check(TokenKind::RParen) && !check(TokenKind::Eof)) {
+            AsmOperand op;
+            op.constraint = std::get<std::string>(expect(TokenKind::LitString).extra);
+            expect(TokenKind::LParen);
+            op.expr = parseExpr();
+            expect(TokenKind::RParen);
+            a->inputs.push_back(std::move(op));
+            match(TokenKind::Comma);
+        }
+    }
+
+    if (match(TokenKind::Colon)) {
+        while (!check(TokenKind::RParen) && !check(TokenKind::Eof)) {
+            a->clobbers.push_back(std::get<std::string>(expect(TokenKind::LitString).extra));
+            match(TokenKind::Comma);
+        }
+    }
+
+    expect(TokenKind::RParen);
+    return a;
 }
 
 NodePtr Parser::parseMatchExpr() {
@@ -668,6 +732,9 @@ NodePtr Parser::parsePrimaryExpr() {
             expect(TokenKind::RParen);
             return n;
         }
+        case TokenKind::KwAsm: {
+            return parseAsmExpr();
+        }
         case TokenKind::LBracket: {
             auto a = std::make_unique<ArrayExpr>();
             a->loc = eat().loc;
@@ -873,4 +940,4 @@ TypePtr Parser::parseTupleType() {
     return t;
 }
 
-} 
+}
